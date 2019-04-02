@@ -101,8 +101,8 @@ class Pkg:
 
 def get_pkg_details_from_name(name):
     if name.endswith(f'pkg.tar.{PKG_COMPRESSION}'):
-        arch = re.match(r'(.+)-([^-]+)-([^-]+)-([^-]+)\.pkg\.tar\.\w+', name)
-        assert arch and arch.groups() and len(arch.groups()) == 4
-        (pkgname, pkgver, pkgrel, arch) = arch.groups()
+        m = re.match(r'(.+)-([^-]+)-([^-]+)-([^-]+)\.pkg\.tar\.\w+', name)
+        assert m and m.groups() and len(m.groups()) == 4
+        (pkgname, pkgver, pkgrel, arch) = m.groups()
         return Pkg(pkgname, pkgver, pkgrel, arch)
 

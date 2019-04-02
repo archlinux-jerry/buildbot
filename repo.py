@@ -53,10 +53,13 @@ def checkenv():
 checkenv()
 
 
-def repo_add(fpath):
-    assert issubclass(type(fpath), os.PathLike) and fpath.name.endswith(f'.pkg.tar.{PKG_COMPRESSION}')
+def repo_add(fpaths):
+    assert type(fpaths) is list
+    for fpath in fpaths:
+        assert issubclass(type(fpath), os.PathLike) and \
+               fpath.name.endswith(f'.pkg.tar.{PKG_COMPRESSION}')
     dbpath = fpath.parent / f'{REPO_NAME}.db.tar.gz'
-    return bash(f'{REPO_CMD} {dbpath} {fpath}')
+    return bash(f'{REPO_CMD} {dbpath} {" ".join([str(fpath for fpath in fpaths)])}')
 
 def throw_away(fpath):
     assert issubclass(type(fpath), os.PathLike)
@@ -91,6 +94,7 @@ def _check_repo():
     for arch in ARCHS:
         basedir = Path('www') / arch
         repo_files_count = list()
+        pkg_to_add = list()
         if not basedir.exists():
             logger.error(f'{arch} dir does not exist!')
             continue
@@ -119,12 +123,16 @@ def _check_repo():
                     assert not newSigpath.exists()
                     sigfile.rename(newSigpath)
                     logger.info(f'Moving {pkgfile} to {newpath}, {sigfile} to {newSigpath}')
-                    logger.debug("repo-add: %s", repo_add(newpath))
+                    pkg_to_add.append(newpath)
                 else:
-                    logger.debug("repo-add: %s", repo_add(pkgfile))
+                    pkg_to_add.append(pkgfile)
             else:
                 logger.warning(f"{pkgfile} is garbage!")
                 throw_away(pkgfile)
+        if pkg_to_add:
+            logger.info("repo-add: %s", repo_add(pkg_to_add))
+        else:
+            logger.warning('repo-add: Nothing to do in %s', arch)
         for rfile in repo_files_essential:
             if rfile not in repo_files_count:
                 logger.error(f'{rfile} does not exist in {arch}!')
