@@ -46,10 +46,7 @@ def checkenv():
     dirs = [Path('updates/archive')] + [Path('www/') / arch for arch in ARCHS]
     for mydir in dirs:
         mydir.mkdir(mode=0o755, exist_ok=True, parents=True)
-    try:
-        symlink(Path('www/archive'), 'updates/archive')
-    except FileExistsError:
-        pass
+    symlink(Path('www/archive'), '../updates/archive')
 checkenv()
 
 
