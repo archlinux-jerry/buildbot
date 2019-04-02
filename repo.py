@@ -59,7 +59,7 @@ def repo_add(fpaths):
         assert issubclass(type(fpath), os.PathLike) and \
                fpath.name.endswith(f'.pkg.tar.{PKG_COMPRESSION}')
     dbpath = fpath.parent / f'{REPO_NAME}.db.tar.gz'
-    return bash(f'{REPO_CMD} {dbpath} {" ".join([str(fpath for fpath in fpaths)])}')
+    return bash(f'{REPO_CMD} {dbpath} {" ".join([str(fpath) for fpath in fpaths])}')
 
 def throw_away(fpath):
     assert issubclass(type(fpath), os.PathLike)
