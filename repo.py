@@ -315,7 +315,8 @@ if __name__ == '__main__':
         arch = arch.split(',') if arch is not False else None
         remove_pkgs = args.remove
         remove_pkgs = remove_pkgs.split(',') if remove_pkgs is not False else None
-        assert not [None for a in arch if a not in ARCHS] # ensure arch (= ARCHS
+        if arch is not None:
+            assert not [None for a in arch if a not in ARCHS] # ensure arch (= ARCHS
         if args.update:
             _update()
         elif args.regenerate:
