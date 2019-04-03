@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 # config
 REPO_NAME='jerryxiao'
 PKG_COMPRESSION='xz'
