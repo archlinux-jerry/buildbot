@@ -297,7 +297,7 @@ def _remove(pkgnames, target_archs=[a for a in ARCHS if a != 'any']):
                 get_pkg_details_from_name(fpath.name).pkgname in pkgnames:
                 remove_pkgs.append(fpath)
         if remove_pkgs:
-            repo_remove(remove_pkgs)
+            logger.info("repo-remove: %s", repo_remove(remove_pkgs))
         else:
             logger.warning(f'Nothing to remove in {arch}')
     logger.info('finished remove')
