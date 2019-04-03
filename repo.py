@@ -122,15 +122,20 @@ def filter_old_pkg(fpaths, keep_new=1, archive=False, recycle=False):
             new_pkgs += family
     for pkg in old_pkgs:
         fullpath = fpaths[0].parent / pkg.fname
+        sigpath = fpaths[0].parent / f'{str(pkg.fname)}.sig'
         if archive:
             archive_pkg(fullpath)
+            if sigpath.exists():
+                archive_pkg(sigpath)
         elif recycle:
             throw_away(fullpath)
+            if sigpath.exists():
+                throw_away(sigpath)
     return (new_pkgs, old_pkgs)
 
 def _clean_archive(keep_new=3):
     basedir = Path('archive')
-    dir_list = [fpath for fpath in basedir.iterdir()]
+    dir_list = [fpath for fpath in basedir.iterdir() if fpath.name.endswith(PKG_SUFFIX)]
     filter_old_pkg(dir_list, keep_new=keep_new, recycle=True)
 
 def _regenerate(target_archs=ARCHS, just_symlink=False):
@@ -171,7 +176,7 @@ def _regenerate(target_archs=ARCHS, just_symlink=False):
             logger.error(f'{arch} dir does not exist!')
             continue
         pkgfiles = [f for f in basedir.iterdir()]
-        filter_old_pkg(pkgfiles, keep_new=1, recycle=True)
+        filter_old_pkg([f for f in pkgfiles if f.name.endswith(PKG_SUFFIX)], keep_new=1, recycle=True)
         for pkgfile in pkgfiles:
             if pkgfile.name in repo_files:
                 repo_files_count.append(pkgfile.name)
@@ -215,7 +220,7 @@ def _update():
     assert update_path.exists()
     pkgs_to_add = dict()
     dir_list = [fpath for fpath in update_path.iterdir()]
-    filter_old_pkg(dir_list, keep_new=1, archive=True)
+    filter_old_pkg([f for f in dir_list if f.name.endswith(PKG_SUFFIX)], keep_new=1, archive=True)
     for pkg_to_add in dir_list:
         if pkg_to_add.is_dir():
             continue
