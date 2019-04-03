@@ -175,8 +175,9 @@ def _regenerate(target_archs=ARCHS, just_symlink=False):
         if not basedir.exists():
             logger.error(f'{arch} dir does not exist!')
             continue
+        filter_old_pkg([f for f in basedir.iterdir() if f.name.endswith(PKG_SUFFIX)],
+                       keep_new=1, recycle=True)
         pkgfiles = [f for f in basedir.iterdir()]
-        filter_old_pkg([f for f in pkgfiles if f.name.endswith(PKG_SUFFIX)], keep_new=1, recycle=True)
         for pkgfile in pkgfiles:
             if pkgfile.name in repo_files:
                 repo_files_count.append(pkgfile.name)
@@ -219,9 +220,9 @@ def _update():
     update_path = Path('updates')
     assert update_path.exists()
     pkgs_to_add = dict()
-    dir_list = [fpath for fpath in update_path.iterdir()]
-    filter_old_pkg([f for f in dir_list if f.name.endswith(PKG_SUFFIX)], keep_new=1, archive=True)
-    for pkg_to_add in dir_list:
+    filter_old_pkg([f for f in update_path.iterdir() if f.name.endswith(PKG_SUFFIX)],
+                   keep_new=1, archive=True)
+    for pkg_to_add in update_path.iterdir():
         if pkg_to_add.is_dir():
             continue
         else:
