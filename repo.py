@@ -110,9 +110,9 @@ def filter_old_pkg(fpaths, keep_new=1, archive=False, recycle=False):
     pkgs_vers = dict()
     for fpath in fpaths:
         pkg = get_pkg_details_from_name(fpath.name)
-        pkgs_vers.setdefault(pkg.pkgname, list()).append(pkg)
-    for pkgname in pkgs_vers:
-        family = pkgs_vers[pkgname]
+        pkgs_vers.setdefault(pkg.pkgname + pkg.arch, list()).append(pkg)
+    for pkgname_arch in pkgs_vers:
+        family = pkgs_vers[pkgname_arch]
         # new packages first
         family = sorted(family, reverse=True)
         if len(family) > keep_new:
@@ -133,10 +133,13 @@ def filter_old_pkg(fpaths, keep_new=1, archive=False, recycle=False):
                 throw_away(sigpath)
     return (new_pkgs, old_pkgs)
 
+
 def _clean_archive(keep_new=3):
+    logger.info('starting clean')
     basedir = Path('archive')
     dir_list = [fpath for fpath in basedir.iterdir() if fpath.name.endswith(PKG_SUFFIX)]
     filter_old_pkg(dir_list, keep_new=keep_new, recycle=True)
+    logger.info('finished clean')
 
 def _regenerate(target_archs=ARCHS, just_symlink=False):
     if just_symlink:
@@ -214,6 +217,7 @@ def _regenerate(target_archs=ARCHS, just_symlink=False):
         for rfile in repo_files_essential:
             if rfile not in repo_files_count:
                 logger.error(f'{rfile} does not exist in {arch}!')
+    logger.info('finished regenerate')
 
 def _update():
     logger.info('starting update')
@@ -258,6 +262,7 @@ def _update():
         else:
             logger.warning(f"{other} is garbage!")
             throw_away(other)
+    logger.info('finished update')
 
 if __name__ == '__main__':
     try:
