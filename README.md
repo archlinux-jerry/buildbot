@@ -13,7 +13,6 @@ updates:
     - ?? (tbd)
 prebuild:
     - standard (do nothing)
-    - git-cherrypick <url> <remote/branch> <local_branch> push*
     - ??
 build:
     - standard (makepkg -s, note that missing aur dependencies will not be resolved.)
