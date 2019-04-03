@@ -155,7 +155,7 @@ def _update():
             if pkg_to_add.name.endswith(PKG_SUFFIX):
                 sigfile = Path(f"{str(pkg_to_add)}.sig")
                 if sigfile.exists():
-                    arch = get_pkg_details_from_name(pkg_to_add).arch
+                    arch = get_pkg_details_from_name(pkg_to_add.name).arch
                     pkg_nlocation = pkg_to_add.parent / '..' / 'www' / arch / pkg_to_add.name
                     sig_nlocation = Path(f'{str(pkg_nlocation)}.sig')
                     logger.info(f'Moving {pkg_to_add} to {pkg_nlocation}, {sigfile} to {sig_nlocation}')

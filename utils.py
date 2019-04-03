@@ -102,6 +102,7 @@ class Pkg:
         self.arch = arch
 
 def get_pkg_details_from_name(name):
+    assert type(name) is str
     if name.endswith(f'pkg.tar.{PKG_COMPRESSION}'):
         m = re.match(r'(.+)-([^-]+)-([^-]+)-([^-]+)\.pkg\.tar\.\w+', name)
         assert m and m.groups() and len(m.groups()) == 4
