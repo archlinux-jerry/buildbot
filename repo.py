@@ -80,7 +80,8 @@ def repo_remove(fpaths):
     for fpath in fpaths:
         throw_away(fpath)
         sigpath = fpath.parent / f'{str(fpath.name)}.sig'
-        if sigpath.exists():
+        # there is a fscking problem that fscking pathlib always follow symlinks
+        if sigpath.exists() or sigpath.is_symlink():
             throw_away(sigpath)
     pkgnames = [get_pkg_details_from_name(fpath.name).pkgname for fpath in fpaths]
     return bash(f'{REPO_REMOVE_CMD} {dbpath} {" ".join(pkgnames)}', RUN_CMD_TIMEOUT=5*60)
