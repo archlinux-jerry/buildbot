@@ -7,9 +7,10 @@
 # buildbot                             -- buildbot (git)
 # buildbot/repo                        -- repo root
     # /updates/                        -- new packages goes in here
-    # /updates/archive                 -- archive dir, old packages goes in here
+    # /recycled/                       -- litter bin
+    # /archive/                        -- archive dir, old packages goes in here
     # /www/                            -- http server root
-    # /www/archive => /updates/archive -- archive dir for users
+    # /www/archive => /archive         -- archive dir for users
     # /www/aarch64                     -- packages for "aarch64"
     # /www/any                         -- packages for "any"
     # /www/armv7h                      -- packages for "armv7h" (No build bot)
@@ -18,8 +19,10 @@
 
 import os
 from pathlib import Path
+from shutil import copyfile as __copy_file
 import logging
-from utils import bash, Pkg, get_pkg_details_from_name, print_exc_plus
+from utils import bash, Pkg, get_pkg_details_from_name, \
+                  print_exc_plus
 from time import time
 import argparse
 
@@ -40,16 +43,21 @@ def symlink(dst, src, exist_ok=True):
     try:
         dst.symlink_to(src)
     except FileExistsError:
-        if not exist_ok:
+        if (not dst.is_symlink()) or (not exist_ok):
             raise
 
-def checkenv():
-    (Path(abspath).parent / 'recycled').mkdir(mode=0o755, exist_ok=True)
-    dirs = [Path('updates/archive')] + [Path('www/') / arch for arch in ARCHS]
+def copyfile(src, dst):
+    src = str(src)
+    dst = str(dst)
+    __copy_file(src, dst, follow_symlinks=False)
+
+def prepare_env():
+    dirs = [Path('updates/'), Path('archive/'), Path('recycled/')] + \
+           [Path('www/') / arch for arch in ARCHS]
     for mydir in dirs:
         mydir.mkdir(mode=0o755, exist_ok=True, parents=True)
-    symlink(Path('www/archive'), '../updates/archive')
-checkenv()
+    symlink(Path('www/archive'), '../archive')
+prepare_env()
 
 
 def repo_add(fpaths):
@@ -62,11 +70,68 @@ def repo_add(fpaths):
 
 def throw_away(fpath):
     assert issubclass(type(fpath), os.PathLike)
-    newPath = Path(abspath).parent / 'recycled' / f"{fpath.name}_{time()}"
+    newPath = Path('recycled') / f"{fpath.name}_{time()}"
     assert not newPath.exists()
     logger.warning('Throwing away %s', fpath)
     fpath.rename(newPath)
 
+def archive_pkg(fpath):
+    assert issubclass(type(fpath), os.PathLike)
+    if fpath.is_symlink():
+        logger.warning('Not archiving symlink %s', fpath)
+        throw_away(fpath)
+        return
+    newPath = Path('archive') / fpath.name
+    assert not newPath.exists()
+    logger.warning('Archiving %s', fpath)
+    fpath.rename(newPath)
+
+def filter_old_pkg(fpaths, keep_new=1, archive=False, recycle=False):
+    '''
+        Accepts a list of paths (must be in the same dir)
+        return a tuple of list of paths
+        ([new1, new2], [old1, old2])
+        packages are arranged from new to old, one by one.
+        new: pkga-v8, pkga-v7, pkgb-v5, pkgb-v4
+        old: pkga-v6, pkga-v5, pkgb-v3, pkgb-v2
+        (assume keep_new=2)
+    '''
+    if not fpaths:
+        return (list(), list())
+    assert type(fpaths) is list
+    for fpath in fpaths:
+        assert issubclass(type(fpath), os.PathLike) and \
+               fpath.name.endswith(PKG_SUFFIX)
+    assert not (archive and recycle)
+    assert not [None for fpath in fpaths if fpath.parent != fpaths[0].parent]
+
+    new_pkgs = list()
+    old_pkgs = list()
+    pkgs_vers = dict()
+    for fpath in fpaths:
+        pkg = get_pkg_details_from_name(fpath.name)
+        pkgs_vers.setdefault(pkg.pkgname, list()).append(pkg)
+    for pkgname in pkgs_vers:
+        family = pkgs_vers[pkgname]
+        # new packages first
+        family = sorted(family, reverse=True)
+        if len(family) > keep_new:
+            new_pkgs += family[:keep_new]
+            old_pkgs += family[keep_new:]
+        else:
+            new_pkgs += family
+    for pkg in old_pkgs:
+        fullpath = fpaths[0].parent / pkg.fname
+        if archive:
+            archive_pkg(fullpath)
+        elif recycle:
+            throw_away(fullpath)
+    return (new_pkgs, old_pkgs)
+
+def _clean_archive(keep_new=3):
+    basedir = Path('archive')
+    dir_list = [fpath for fpath in basedir.iterdir()]
+    filter_old_pkg(dir_list, keep_new=keep_new, recycle=True)
 
 def _regenerate(target_archs=ARCHS, just_symlink=False):
     if just_symlink:
@@ -106,6 +171,7 @@ def _regenerate(target_archs=ARCHS, just_symlink=False):
             logger.error(f'{arch} dir does not exist!')
             continue
         pkgfiles = [f for f in basedir.iterdir()]
+        filter_old_pkg(pkgfiles, keep_new=1, recycle=True)
         for pkgfile in pkgfiles:
             if pkgfile.name in repo_files:
                 repo_files_count.append(pkgfile.name)
@@ -148,7 +214,9 @@ def _update():
     update_path = Path('updates')
     assert update_path.exists()
     pkgs_to_add = dict()
-    for pkg_to_add in update_path.iterdir():
+    dir_list = [fpath for fpath in update_path.iterdir()]
+    filter_old_pkg(dir_list, keep_new=1, archive=True)
+    for pkg_to_add in dir_list:
         if pkg_to_add.is_dir():
             continue
         else:
@@ -158,10 +226,12 @@ def _update():
                     arch = get_pkg_details_from_name(pkg_to_add.name).arch
                     pkg_nlocation = pkg_to_add.parent / '..' / 'www' / arch / pkg_to_add.name
                     sig_nlocation = Path(f'{str(pkg_nlocation)}.sig')
-                    logger.info(f'Moving {pkg_to_add} to {pkg_nlocation}, {sigfile} to {sig_nlocation}')
+                    logger.info(f'Copying {pkg_to_add} to {pkg_nlocation}, {sigfile} to {sig_nlocation}')
                     assert not (pkg_nlocation.exists() or sig_nlocation.exists())
-                    pkg_to_add.rename(pkg_nlocation)
-                    sigfile.rename(sig_nlocation)
+                    copyfile(pkg_to_add, pkg_nlocation)
+                    copyfile(sigfile, sig_nlocation)
+                    archive_pkg(pkg_to_add)
+                    archive_pkg(sigfile)
                     if arch == 'any':
                         for arch in ARCHS:
                             pkg_nlocation = pkg_to_add.parent / '..' / 'www' / arch / pkg_to_add.name
@@ -189,6 +259,7 @@ if __name__ == '__main__':
         parser.add_argument('-a', '--arch', nargs='?', default='all', help='arch to regenerate, split by comma, defaults to all')
         parser.add_argument('-u', '--update', action='store_true', help='get updates from updates dir, push them to the repo')
         parser.add_argument('-r', '--regenerate', action='store_true', help='regenerate the whole package database')
+        parser.add_argument('-c', '--clean', action='store_true', help='clean archive, keep 3 recent versions')
         args = parser.parse_args()
         arch = args.arch
         arch = arch.split(',') if arch != 'all' else ARCHS
@@ -197,6 +268,8 @@ if __name__ == '__main__':
             _update()
         elif args.regenerate:
             _regenerate(target_archs=arch)
+        elif args.clean:
+            _clean_archive(keep_new=3)
         else:
             parser.error("Please choose an action")
     except Exception as err:
