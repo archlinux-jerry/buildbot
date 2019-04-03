@@ -10,6 +10,7 @@ BUILD_ARCHS = ['aarch64', 'any', 'x86_64']
 
 #### config for repo.py
 REPO_CMD = 'repo-add --verify --remove'
+REPO_REMOVE_CMD = 'repo-remove --verify'
 RECENT_VERSIONS_KEPT = 3
 PREFERRED_ANY_BUILD_ARCH = 'x86_64'
 

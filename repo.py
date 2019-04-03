@@ -26,7 +26,8 @@ from utils import bash, Pkg, get_pkg_details_from_name, \
 from time import time
 import argparse
 
-from config import REPO_NAME, PKG_COMPRESSION, ARCHS, REPO_CMD
+from config import REPO_NAME, PKG_COMPRESSION, ARCHS, REPO_CMD, \
+                   REPO_REMOVE_CMD
 from shared_vars import PKG_SUFFIX, PKG_SIG_SUFFIX
 
 abspath = os.path.abspath(__file__)
@@ -62,11 +63,27 @@ prepare_env()
 
 def repo_add(fpaths):
     assert type(fpaths) is list
+    assert not [None for fpath in fpaths if fpath.parent != fpaths[0].parent]
     for fpath in fpaths:
         assert issubclass(type(fpath), os.PathLike) and \
                fpath.name.endswith(PKG_SUFFIX)
-    dbpath = fpath.parent / f'{REPO_NAME}.db.tar.gz'
+    dbpath = fpaths[0].parent / f'{REPO_NAME}.db.tar.gz'
     return bash(f'{REPO_CMD} {dbpath} {" ".join([str(fpath) for fpath in fpaths])}', RUN_CMD_TIMEOUT=5*60)
+
+def repo_remove(fpaths):
+    assert type(fpaths) is list
+    assert not [None for fpath in fpaths if fpath.parent != fpaths[0].parent]
+    for fpath in fpaths:
+        assert issubclass(type(fpath), os.PathLike) and \
+               fpath.name.endswith(PKG_SUFFIX)
+    dbpath = fpaths[0].parent / f'{REPO_NAME}.db.tar.gz'
+    for fpath in fpaths:
+        throw_away(fpath)
+        sigpath = fpath.parent / f'{str(fpath.name)}.sig'
+        if sigpath.exists():
+            throw_away(sigpath)
+    pkgnames = [get_pkg_details_from_name(fpath.name).pkgname for fpath in fpaths]
+    return bash(f'{REPO_REMOVE_CMD} {dbpath} {" ".join(pkgnames)}', RUN_CMD_TIMEOUT=5*60)
 
 def throw_away(fpath):
     assert issubclass(type(fpath), os.PathLike)
@@ -264,24 +281,57 @@ def _update():
             throw_away(other)
     logger.info('finished update')
 
+def _remove(pkgnames, target_archs=[a for a in ARCHS if a != 'any']):
+    assert type(pkgnames) is list and pkgnames
+    assert not [None for s in pkgnames if not (type(s) is str)]
+    logger.info('starting remove %s for %s', pkgnames, target_archs)
+    if len(target_archs) == 1 and target_archs[0] == 'any':
+        target_archs = ARCHS
+    else:
+        assert 'any' not in target_archs
+    for arch in target_archs:
+        remove_pkgs = list()
+        basedir = Path('www') / arch
+        for fpath in basedir.iterdir():
+            if fpath.name.endswith(PKG_SUFFIX) and \
+                get_pkg_details_from_name(fpath.name).pkgname in pkgnames:
+                remove_pkgs.append(fpath)
+        if remove_pkgs:
+            repo_remove(remove_pkgs)
+        else:
+            logger.warning(f'Nothing to remove in {arch}')
+    logger.info('finished remove')
+
 if __name__ == '__main__':
     try:
         parser = argparse.ArgumentParser(description='Automatic management tool for an arch repo.')
-        parser.add_argument('-a', '--arch', nargs='?', default='all', help='arch to regenerate, split by comma, defaults to all')
+        parser.add_argument('-a', '--arch', nargs='?', default=False, help='arch to regenerate, split by comma, defaults to all')
         parser.add_argument('-u', '--update', action='store_true', help='get updates from updates dir, push them to the repo')
         parser.add_argument('-r', '--regenerate', action='store_true', help='regenerate the whole package database')
+        parser.add_argument('-R', '--remove', nargs='?', default=False, help='remove comma split packages from the database')
         parser.add_argument('-c', '--clean', action='store_true', help='clean archive, keep 3 recent versions')
         args = parser.parse_args()
         arch = args.arch
-        arch = arch.split(',') if arch != 'all' else ARCHS
+        arch = arch.split(',') if arch is not False else None
+        remove_pkgs = args.remove
+        remove_pkgs = remove_pkgs.split(',') if remove_pkgs is not False else None
         assert not [None for a in arch if a not in ARCHS] # ensure arch (= ARCHS
         if args.update:
             _update()
         elif args.regenerate:
-            _regenerate(target_archs=arch)
+            if arch:
+                _regenerate(target_archs=arch)
+            else:
+                _regenerate()
         elif args.clean:
             _clean_archive(keep_new=3)
+        elif remove_pkgs:
+            if arch:
+                _remove(remove_pkgs, target_archs=arch)
+            else:
+                _remove(remove_pkgs)
         else:
             parser.error("Please choose an action")
     except Exception as err:
         print_exc_plus()
+
