@@ -34,7 +34,6 @@ repocwd = Path(abspath).parent / 'repo'
 repocwd.mkdir(mode=0o755, exist_ok=True)
 os.chdir(repocwd)
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
@@ -78,7 +77,7 @@ def repo_remove(fpaths):
     dbpath = fpaths[0].parent / f'{REPO_NAME}.db.tar.gz'
     for fpath in fpaths:
         throw_away(fpath)
-        sigpath = fpath.parent / f'{str(fpath.name)}.sig'
+        sigpath = fpath.parent / f'{fpath.name}.sig'
         # there is a fscking problem that fscking pathlib always follow symlinks
         if sigpath.exists() or sigpath.is_symlink():
             throw_away(sigpath)
@@ -139,7 +138,7 @@ def filter_old_pkg(fpaths, keep_new=1, archive=False, recycle=False):
             new_pkgs += family
     for pkg in old_pkgs:
         fullpath = fpaths[0].parent / pkg.fname
-        sigpath = fpaths[0].parent / f'{str(pkg.fname)}.sig'
+        sigpath = fpaths[0].parent / f'{pkg.fname}.sig'
         if archive:
             archive_pkg(fullpath)
             if sigpath.exists():
@@ -176,7 +175,7 @@ def _regenerate(target_archs=ARCHS, just_symlink=False):
         for pkgfile in basedir.iterdir():
             if pkgfile.name.endswith(PKG_SUFFIX) and \
                get_pkg_details_from_name(pkgfile.name).arch == 'any':
-                sigfile = Path(f"{str(pkgfile)}.sig")
+                sigfile = Path(f"{pkgfile}.sig")
                 if sigfile.exists():
                     logger.info(f'Creating symlink for {pkgfile}, {sigfile}')
                     for arch in target_archs:
@@ -209,7 +208,7 @@ def _regenerate(target_archs=ARCHS, just_symlink=False):
                     throw_away(pkgfile)
                     continue
             elif pkgfile.name.endswith(PKG_SUFFIX):
-                sigfile = Path(f"{str(pkgfile)}.sig")
+                sigfile = Path(f"{pkgfile}.sig")
                 if not sigfile.exists():
                     logger.warning(f"{pkgfile} has no signature!")
                     throw_away(pkgfile)
@@ -217,7 +216,7 @@ def _regenerate(target_archs=ARCHS, just_symlink=False):
                 realarch = get_pkg_details_from_name(pkgfile.name).arch
                 if realarch != 'any' and realarch != arch:
                     newpath = pkgfile.parent / '..' / realarch / pkgfile.name
-                    newSigpath= Path(f'{str(newpath)}.sig')
+                    newSigpath= Path(f'{newpath}.sig')
                     logger.info(f'Moving {pkgfile} to {newpath}, {sigfile} to {newSigpath}')
                     assert not (newpath.exists() or newSigpath.exists())
                     pkgfile.rename(newpath)
@@ -238,7 +237,7 @@ def _regenerate(target_archs=ARCHS, just_symlink=False):
     logger.info('finished regenerate')
     return True
 
-def _update():
+def _update(overwrite=False):
     logger.info('starting update')
     update_path = Path('updates')
     assert update_path.exists()
@@ -250,13 +249,18 @@ def _update():
             continue
         else:
             if pkg_to_add.name.endswith(PKG_SUFFIX):
-                sigfile = Path(f"{str(pkg_to_add)}.sig")
+                sigfile = Path(f"{pkg_to_add}.sig")
                 if sigfile.exists():
                     arch = get_pkg_details_from_name(pkg_to_add.name).arch
                     pkg_nlocation = pkg_to_add.parent / '..' / 'www' / arch / pkg_to_add.name
-                    sig_nlocation = Path(f'{str(pkg_nlocation)}.sig')
+                    sig_nlocation = Path(f'{pkg_nlocation}.sig')
                     logger.info(f'Copying {pkg_to_add} to {pkg_nlocation}, {sigfile} to {sig_nlocation}')
-                    assert not (pkg_nlocation.exists() or sig_nlocation.exists())
+                    if overwrite:
+                        for nlocation in (pkg_nlocation, sig_nlocation):
+                            if nlocation.exists():
+                                logger.warning(f'Overwriting {nlocation}')
+                    else:
+                        assert not (pkg_nlocation.exists() or sig_nlocation.exists())
                     copyfile(pkg_to_add, pkg_nlocation)
                     copyfile(sigfile, sig_nlocation)
                     archive_pkg(pkg_to_add)
@@ -307,10 +311,12 @@ def _remove(pkgnames, target_archs=[a for a in ARCHS if a != 'any']):
     return True
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     import argparse
     try:
         parser = argparse.ArgumentParser(description='Automatic management tool for an arch repo.')
         parser.add_argument('-a', '--arch', nargs='?', default=False, help='arch to regenerate, split by comma, defaults to all')
+        parser.add_argument('-o', '--overwrite', action='store_true', help='overwrite when updating existing packages')
         parser.add_argument('-u', '--update', action='store_true', help='get updates from updates dir, push them to the repo')
         parser.add_argument('-r', '--regenerate', action='store_true', help='regenerate the whole package database')
         parser.add_argument('-R', '--remove', nargs='?', default=False, help='remove comma split packages from the database')
@@ -323,7 +329,7 @@ if __name__ == '__main__':
         if arch is not None:
             assert not [None for a in arch if a not in ARCHS] # ensure arch (= ARCHS
         if args.update:
-            _update()
+            _update(overwrite=args.overwrite)
         elif args.regenerate:
             if arch:
                 _regenerate(target_archs=arch)

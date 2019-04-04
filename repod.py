@@ -64,34 +64,41 @@ class pushFm:
                 return None
         else:
             return None
-    def done(self, fname):
+    def done(self, fname, overwrite=False):
         '''
             return None means success
             else returns an error string
         '''
         if fname == self.fname:
-            self.__init__()
-            update_path = Path('updates')
-            pkg_found = False
-            sig_found = False
-            for fpath in update_path.iterdir():
-                if fpath.is_dir:
-                    continue
-                if fpath.name == self.fname:
-                    pkg_found = fpath
-                elif fpath.name == f'{self.fname}.sig':
-                    sig_found = fpath
-            if pkg_found and sig_found:
-                try:
-                    bash(f'{GPG_VERIFY_CMD} {str(sig_found)} {str(pkg_found)}')
-                except CalledProcessError:
-                    print_exc_plus()
-                    return 'GPG verify error'
+            try:
+                update_path = Path('updates')
+                pkg_found = False
+                sig_found = False
+                for fpath in update_path.iterdir():
+                    if fpath.is_dir:
+                        continue
+                    if fpath.name == self.fname:
+                        pkg_found = fpath
+                    elif fpath.name == f'{self.fname}.sig':
+                        sig_found = fpath
+                if pkg_found and sig_found:
+                    try:
+                        bash(f'{GPG_VERIFY_CMD} {sig_found} {pkg_found}')
+                    except CalledProcessError:
+                        print_exc_plus()
+                        return 'GPG verify error'
+                    else:
+                        try:
+                            if update(overwrite=overwrite):
+                                return None
+                        except Exception:
+                            print_exc_plus()
+                        return 'update error'
                 else:
-                    return None
-            else:
-                return f'file missing: pkg {str(pkg_found)} sig {str(sig_found)}'
-            return "unexpected error"
+                    return f'file missing: pkg {pkg_found} sig {sig_found}'
+                return "unexpected error"
+            finally:
+                self.__init__()
         else:
             return "Wrong file"
     def is_busy(self):
@@ -114,18 +121,8 @@ def push_files(filename, size):
     pfm.tick()
     return pfm.start(filename, size)
 
-def add_files(filename):
-    res = pfm.done(filename)
-    if res:
-        return res
-    else:
-        try:
-            if update():
-                return None
-        except Exception:
-            print_exc_plus()
-            return 'update error'
-
+def add_files(filename, overwrite=False):
+    return pfm.done(filename, overwrite=overwrite)
 
 if __name__ == '__main__':
     while True:
