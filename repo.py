@@ -24,7 +24,6 @@ import logging
 from utils import bash, Pkg, get_pkg_details_from_name, \
                   print_exc_plus
 from time import time
-import argparse
 
 from config import REPO_NAME, PKG_COMPRESSION, ARCHS, REPO_CMD, \
                    REPO_REMOVE_CMD
@@ -158,6 +157,7 @@ def _clean_archive(keep_new=3):
     dir_list = [fpath for fpath in basedir.iterdir() if fpath.name.endswith(PKG_SUFFIX)]
     filter_old_pkg(dir_list, keep_new=keep_new, recycle=True)
     logger.info('finished clean')
+    return True
 
 def _regenerate(target_archs=ARCHS, just_symlink=False):
     if just_symlink:
@@ -187,7 +187,7 @@ def _regenerate(target_archs=ARCHS, just_symlink=False):
     else:
         logger.error(f'{arch} dir does not exist!')
     if just_symlink:
-        return
+        return True
     # run repo_add
     for arch in target_archs:
         basedir = Path('www') / arch
@@ -236,6 +236,7 @@ def _regenerate(target_archs=ARCHS, just_symlink=False):
             if rfile not in repo_files_count:
                 logger.error(f'{rfile} does not exist in {arch}!')
     logger.info('finished regenerate')
+    return True
 
 def _update():
     logger.info('starting update')
@@ -281,6 +282,7 @@ def _update():
             logger.warning(f"{other} is garbage!")
             throw_away(other)
     logger.info('finished update')
+    return True
 
 def _remove(pkgnames, target_archs=[a for a in ARCHS if a != 'any']):
     assert type(pkgnames) is list and pkgnames
@@ -302,8 +304,10 @@ def _remove(pkgnames, target_archs=[a for a in ARCHS if a != 'any']):
         else:
             logger.warning(f'Nothing to remove in {arch}')
     logger.info('finished remove')
+    return True
 
 if __name__ == '__main__':
+    import argparse
     try:
         parser = argparse.ArgumentParser(description='Automatic management tool for an arch repo.')
         parser.add_argument('-a', '--arch', nargs='?', default=False, help='arch to regenerate, split by comma, defaults to all')
@@ -336,4 +340,4 @@ if __name__ == '__main__':
             parser.error("Please choose an action")
     except Exception as err:
         print_exc_plus()
-
+        parser.exit(status=1)
