@@ -98,7 +98,9 @@ def archive_pkg(fpath):
         throw_away(fpath)
         return
     newPath = Path('archive') / fpath.name
-    assert not newPath.exists()
+    if newPath.exists():
+        logger.warning(f'Removing old archive {newPath}')
+        throw_away(newPath)
     logger.warning('Archiving %s', fpath)
     fpath.rename(newPath)
 
