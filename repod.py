@@ -4,7 +4,6 @@
 # This file is part of Buildbot by JerryXiao
 
 import logging
-from threading import Thread
 from multiprocessing.connection import Listener
 from time import time, sleep
 from pathlib import Path
@@ -106,6 +105,17 @@ class pushFm:
 
 pfm = pushFm()
 
+def push_files(filename, size):
+    pfm.tick()
+    return pfm.start(filename, size)
+
+def add_files(filename, overwrite=False):
+    return pfm.done(filename, overwrite=overwrite)
+
+
+
+# server part
+
 def run(funcname, args=list(), kwargs=dict()):
     if funcname in ('clean', 'regenerate', 'remove',
                     'update', 'push_files', 'add_files'):
@@ -116,13 +126,6 @@ def run(funcname, args=list(), kwargs=dict()):
     else:
         logger.error('unexpected: %s %s %s',funcname, args, kwargs)
         return False
-
-def push_files(filename, size):
-    pfm.tick()
-    return pfm.start(filename, size)
-
-def add_files(filename, overwrite=False):
-    return pfm.done(filename, overwrite=overwrite)
 
 if __name__ == '__main__':
     while True:

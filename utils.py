@@ -25,12 +25,12 @@ def bash(cmdline, **kwargs):
     logger.info(f'bash: {cmdline}')
     return(run_cmd(['/bin/bash', '-x', '-e', '-c', cmdline], **kwargs))
 
-def long_bash(cmdline, hours=2):
+def long_bash(cmdline, cwd=None, hours=2):
     assert type(hours) is int and hours >= 1
     logger.info(f'longbash{hours}: {cmdline}')
-    return bash(cmdline, keepalive=True, KEEPALIVE_TIMEOUT=60, RUN_CMD_TIMEOUT=hours*60*60)
+    return bash(cmdline, cwd=cwd, keepalive=True, KEEPALIVE_TIMEOUT=60, RUN_CMD_TIMEOUT=hours*60*60)
 
-def run_cmd(cmd, keepalive=False, KEEPALIVE_TIMEOUT=30, RUN_CMD_TIMEOUT=60):
+def run_cmd(cmd, cwd=None, keepalive=False, KEEPALIVE_TIMEOUT=30, RUN_CMD_TIMEOUT=60):
     logger.debug('run_cmd: %s', cmd)
     RUN_CMD_LOOP_TIME = KEEPALIVE_TIMEOUT - 1 if KEEPALIVE_TIMEOUT >= 10 else 5
     stopped = False
@@ -50,7 +50,7 @@ def run_cmd(cmd, keepalive=False, KEEPALIVE_TIMEOUT=30, RUN_CMD_TIMEOUT=60):
             last_read[0] = last_read_time
             last_read[1] = line
         stdout_lock.release()
-    p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+    p = subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                          stderr=subprocess.STDOUT, encoding='utf-8')
     check_stdout(p.stdout)
     process_start = int(time())
@@ -182,4 +182,3 @@ def print_exc_plus():
                 print(value)
             except:
                 print("<ERROR WHILE PRINTING VALUE>")
-

@@ -6,7 +6,10 @@
 ARCHS = ['aarch64', 'any', 'armv7h', 'x86_64']
 REPO_NAME='jerryxiao'
 PKG_COMPRESSION='xz'
-BUILD_ARCHS = ['aarch64', 'any', 'x86_64']
+BUILD_ARCHS = ['aarch64', 'x86_64']
+BUILD_ARCH_MAPPING = {'aarch64': 'aarch64', 'x86_64': 'x86_64', 'any': 'x86_64', 'armv7h': None}
+
+AUTOBUILD_FNAME = 'autobuild.yaml'
 
 
 #### config for repo.py
@@ -38,3 +41,11 @@ GPG_SIGN_CMD = (f'gpg --default-key {GPG_KEY} --no-armor'
 
 MASTER_BIND_ADDRESS = ('localhost', 7011)
 MASTER_BIND_PASSWD = b'mypassword'
+PKGBUILD_DIR = 'pkgbuilds'
+MAKEPKG = 'makepkg --nosign --needed --noconfirm --noprogressbar --nocolor'
+
+MAKEPKG_UPD_CMD = 'makepkg --syncdeps --nobuild'
+MAKEPKG_MAKE_CMD = 'makepkg --syncdeps --noextract'
+MAKEPKG_MAKE_CMD_CLEAN = 'makepkg --syncdeps --noextract --clean --cleanbuild'
+
+MAKEPKG_PKGLIST_CMD = f'{MAKEPKG} --packagelist'
