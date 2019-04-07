@@ -5,10 +5,13 @@ import logging
 from time import time
 import re
 from threading import Thread, Lock
+from pathlib import Path
+import os
 import sys
 import traceback
 
-from config import PKG_COMPRESSION
+from config import PKG_COMPRESSION, SHELL_ARCH_ARM64, SHELL_ARCH_X64, \
+                   CONTAINER_BUILDBOT_ROOT, ARCHS
 
 logger = logging.getLogger(name='utils')
 
@@ -22,74 +25,107 @@ def background(func):
 
 def bash(cmdline, **kwargs):
     assert type(cmdline) is str
-    logger.info(f'bash: {cmdline}')
+    logger.info(f'bash: {cmdline}, kwargs: {kwargs}')
     return(run_cmd(['/bin/bash', '-x', '-e', '-c', cmdline], **kwargs))
 
-def long_bash(cmdline, cwd=None, hours=2):
-    assert type(hours) is int and hours >= 1
-    logger.info(f'longbash{hours}: {cmdline}')
-    return bash(cmdline, cwd=cwd, keepalive=True, KEEPALIVE_TIMEOUT=60, RUN_CMD_TIMEOUT=hours*60*60)
+def mon_bash(cmdline, cwd=None, minutes=30, **kwargs):
+    assert type(minutes) is int and minutes >= 1
+    return bash(cmdline, cwd=cwd, keepalive=True, KEEPALIVE_TIMEOUT=60,
+                RUN_CMD_TIMEOUT=minutes*60, **kwargs)
 
-def run_cmd(cmd, cwd=None, keepalive=False, KEEPALIVE_TIMEOUT=30, RUN_CMD_TIMEOUT=60):
+def nspawn_shell(arch, cmdline, cwd=None, **kwargs):
+    root = Path(CONTAINER_BUILDBOT_ROOT)
+    if cwd:
+        cwd = root / cwd
+    else:
+        cwd = root
+    if arch in ('aarch64', 'arm64'):
+        return bash(SHELL_ARCH_ARM64.format(command=f'cd \"{cwd}\" || exit 1; {cmdline}'))
+    elif arch in ('x64', 'x86', 'x86_64'):
+        return bash(SHELL_ARCH_X64.format(command=f'cd \"{cwd}\" || exit 1; {cmdline}'))
+    raise TypeError('nspawn_shell: wrong arch')
+
+def mon_nspawn_shell(arch, cmdline, cwd, minutes=30, **kwargs):
+    assert type(minutes) is int and minutes >= 1
+    return nspawn_shell(arch, cmdline, cwd=cwd, keepalive=True, KEEPALIVE_TIMEOUT=60,
+                        RUN_CMD_TIMEOUT=minutes*60, **kwargs)
+
+def run_cmd(cmd, cwd=None, keepalive=False, KEEPALIVE_TIMEOUT=30, RUN_CMD_TIMEOUT=60,
+            logfile=None, short_return=False):
     logger.debug('run_cmd: %s', cmd)
     RUN_CMD_LOOP_TIME = KEEPALIVE_TIMEOUT - 1 if KEEPALIVE_TIMEOUT >= 10 else 5
     stopped = False
     last_read = [int(time()), ""]
-    output = list()
+    class Output(list):
+        def append(self, mystring):
+            if not self.__short_return:
+                super().append(mystring)
+            if self.__file and type(mystring) is str:
+                self.__file.write(mystring)
+        def __enter__(self, logfile=None, short_return=False):
+            self.__short_return = short_return
+            if logfile:
+                assert issubclass(type(logfile), os.PathLike)
+                self.__file = open(logfile, 'w')
+            else:
+                self.__file = None
+        def __exit__(self, type, value, traceback):
+            if self.__file:
+                self.__file.close()
     stdout_lock = Lock()
-    @background
-    def check_stdout(stdout):
-        nonlocal stopped, last_read, output
-        stdout_lock.acquire()
-        last_read_time = int(time())
-        while stopped is False:
-            line = stdout.readline(4096)
+    with Output(logfile=logfile, short_return=short_return) as output:
+        @background
+        def check_stdout(stdout):
+            nonlocal stopped, last_read, output
+            stdout_lock.acquire()
             last_read_time = int(time())
-            logger.debug(line)
-            output.append(line)
-            last_read[0] = last_read_time
-            last_read[1] = line
-        stdout_lock.release()
-    p = subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                         stderr=subprocess.STDOUT, encoding='utf-8')
-    check_stdout(p.stdout)
-    process_start = int(time())
-    while True:
-        try:
-            p.wait(timeout=RUN_CMD_LOOP_TIME)
-        except subprocess.TimeoutExpired:
-            time_passed = int(time()) - last_read[0]
-            if time_passed >= KEEPALIVE_TIMEOUT*2:
-                logger.info('Timeout expired. No action.')
-                output.append('+ Buildbot: Timeout expired. No action.\n')
-            elif time_passed >= KEEPALIVE_TIMEOUT:
-                if keepalive:
-                    logger.info('Timeout expired, writing nl')
-                    output.append('+ Buildbot: Timeout expired, writing nl\n')
-                    p.stdin.write('\n')
-                    p.stdin.flush()
-                else:
-                    logger.info('Timeout expired, not writing nl')
-                    output.append('+ Buildbot: Timeout expired, not writing nl\n')
-            if int(time()) - process_start >= RUN_CMD_TIMEOUT:
+            while stopped is False:
+                line = stdout.readline(4096)
+                last_read_time = int(time())
+                logger.debug(line)
+                output.append(line)
+                last_read[0] = last_read_time
+                last_read[1] = line
+            stdout_lock.release()
+        p = subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT, encoding='utf-8')
+        check_stdout(p.stdout)
+        process_start = int(time())
+        while True:
+            try:
+                p.wait(timeout=RUN_CMD_LOOP_TIME)
+            except subprocess.TimeoutExpired:
+                time_passed = int(time()) - last_read[0]
+                if time_passed >= KEEPALIVE_TIMEOUT*2:
+                    logger.info('Timeout expired. No action.')
+                    output.append('+ Buildbot: Timeout expired. No action.\n')
+                elif time_passed >= KEEPALIVE_TIMEOUT:
+                    if keepalive:
+                        logger.info('Timeout expired, writing nl')
+                        output.append('+ Buildbot: Timeout expired, writing nl\n')
+                        p.stdin.write('\n')
+                        p.stdin.flush()
+                    else:
+                        logger.info('Timeout expired, not writing nl')
+                        output.append('+ Buildbot: Timeout expired, not writing nl\n')
+                if int(time()) - process_start >= RUN_CMD_TIMEOUT:
+                    stopped = True
+                    logger.error('Process timeout expired, terminating.')
+                    output.append('+ Buildbot: Process timeout expired, terminating.\n')
+                    p.terminate()
+                    try:
+                        p.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        logger.error('Cannot terminate, killing.')
+                        output.append('+ Buildbot: Cannot terminate, killing.\n')
+                        p.kill()
+                    break
+            else:
                 stopped = True
-                logger.error('Process timeout expired, terminating.')
-                output.append('+ Buildbot: Process timeout expired, terminating.\n')
-                p.terminate()
-                try:
-                    p.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    logger.error('Cannot terminate, killing.')
-                    output.append('+ Buildbot: Cannot terminate, killing.\n')
-                    p.kill()
                 break
-        else:
-            stopped = True
-            break
-    code = p.returncode
-
-    stdout_lock.acquire(10)
-    outstr = ''.join(output)
+        code = p.returncode
+        stdout_lock.acquire(10)
+        outstr = ''.join(output)
 
     if code != 0:
         raise subprocess.CalledProcessError(code, cmd, outstr)
@@ -147,6 +183,18 @@ def get_pkg_details_from_name(name):
         assert m and m.groups() and len(m.groups()) == 4
         (pkgname, pkgver, pkgrel, arch) = m.groups()
         return Pkg(pkgname, pkgver, pkgrel, arch, name)
+
+def get_arch_from_pkgbuild(fpath):
+    assert issubclass(type(fpath), os.PathLike)
+    with open(fpath, 'r') as f:
+        for line in f.readline():
+            if line.startswith('arch='):
+                matches = re.findall('[\'\"]([^\'\"]+)[\'\"]', line)
+                if not matches:
+                    raise TypeError('Unexpected PKGBUILD format')
+                assert not [None for match in matches if match not in ARCHS]
+                return matches
+    raise TypeError('Unexpected PKGBUILD')
 
 def print_exc_plus():
     """

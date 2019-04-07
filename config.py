@@ -37,7 +37,7 @@ GPG_SIGN_CMD = (f'gpg --default-key {GPG_KEY} --no-armor'
                  '--pinentry-mode loopback --passphrase \'\''
                  '--detach-sign --yes --')
 
-#### config for master.py
+#### config for buildbot.py
 
 MASTER_BIND_ADDRESS = ('localhost', 7011)
 MASTER_BIND_PASSWD = b'mypassword'
@@ -49,3 +49,8 @@ MAKEPKG_MAKE_CMD = 'makepkg --syncdeps --noextract'
 MAKEPKG_MAKE_CMD_CLEAN = 'makepkg --syncdeps --noextract --clean --cleanbuild'
 
 MAKEPKG_PKGLIST_CMD = f'{MAKEPKG} --packagelist'
+
+CONTAINER_BUILDBOT_ROOT = '~/shared/buildbot'
+# single quote may cause problem here
+SHELL_ARCH_X64 = 'sudo machinectl --quiet shell build@archlinux /bin/bash -c \'{command}\''
+SHELL_ARCH_ARM64 = 'sudo machinectl --quiet shell root@alarm /bin/bash -c $\'su -l alarm -c \\\'{command}\\\'\''

@@ -119,7 +119,7 @@ def add_files(filename, overwrite=False):
 def run(funcname, args=list(), kwargs=dict()):
     if funcname in ('clean', 'regenerate', 'remove',
                     'update', 'push_files', 'add_files'):
-        logger.info('running: %s %s %s',funcname, args, kwargs)
+        logger.info('running: %s %s %s', funcname, args, kwargs)
         ret = eval(funcname)(*args, **kwargs)
         logger.info('done: %s %s',funcname, ret)
         return ret

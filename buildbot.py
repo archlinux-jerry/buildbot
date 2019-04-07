@@ -10,12 +10,14 @@ import os
 from pathlib import Path
 from subprocess import CalledProcessError
 
-from utils import print_exc_plus, background
-
 from config import ARCHS, BUILD_ARCHS, BUILD_ARCH_MAPPING, \
                    MASTER_BIND_ADDRESS, MASTER_BIND_PASSWD, \
-                   PKGBUILD_DIR, MAKEPKG_PKGLIST_CMD, MAKEPKG_UPD_CMD
-from utils import bash, get_pkg_details_from_name, vercmp
+                   PKGBUILD_DIR, MAKEPKG_PKGLIST_CMD, MAKEPKG_UPD_CMD, \
+                   MAKEPKG_MAKE_CMD, MAKEPKG_MAKE_CMD_CLEAN
+
+from utils import print_exc_plus, background, \
+                  bash, get_pkg_details_from_name, vercmp, \
+                  nspawn_shell, mon_nspawn_shell, get_arch_from_pkgbuild
 
 import json
 
@@ -31,53 +33,100 @@ os.chdir(abspath)
 REPO_ROOT = Path(PKGBUILD_DIR)
 
 class Job:
-    def __init__(self, arch, pkgdir, packagelist, version):
-        buildarch = BUILD_ARCH_MAPPING.get(arch, None)
+    def __init__(self, buildarch, pkgconfig, version, multiarch=False):
         assert buildarch in BUILD_ARCHS
-        self.arch = arch
-        self.buildarch = buildarch
-        self.pkgdir = pkgdir
-        self.packagelist = packagelist
+        self.arch = buildarch
+        self.pkgconfig = pkgconfig
         self.version = version
+        self.multiarch = multiarch
         self.added = time()
-        self.claimed = 0
 
 class jobsManager:
     def __init__(self):
-        self.__buildjobs = dict()
-        for arch in BUILD_ARCHS:
-            self.__buildjobs.setdefault(arch, list())
+        self.__buildjobs = list()
         self.__uploadjobs = list()
         self.__curr_job = None
         self.pkgconfigs = load_all_yaml()
-    def _new_buildjob(self, job, buildarch):
+    def _new_buildjob(self, job):
         assert type(job) is Job
-        self.__buildjobs.get(buildarch).append(job)
-    def claim_job(self, buildarch):
-        assert buildarch in BUILD_ARCHS
+        job_to_remove = list()
+        for previous_job in self.__buildjobs:
+            if job.pkgconfig.dirname == previous_job.pkgconfig.dirname and \
+               job.arch == previous_job.arch:
+                job_to_remove.append(previous_job)
+        for oldjob in job_to_remove:
+            self.__buildjobs.remove(oldjob)
+            logger.info('removed an old job for %s %s, %s => %s',
+                        job.pkgconfig.dirname, job.arch,
+                        oldjob.version, job.version)
+        logger.info('new job for %s %s %s',
+                     job.pkgconfig.dirname, job.arch, job.version)
+        self.__buildjobs.append(job)
+    def __get_job(self):
         if self.__curr_job:
             return None
-        jobs = self.__buildjobs.get(buildarch, list())
+        jobs = self.__buildjobs
         if jobs:
             self.__curr_job = jobs.pop(0)
             return self.__curr_job
     def __finish_job(self, pkgdir):
-        assert pkgdir == self.__curr_job.pkgdir
+        assert pkgdir == self.__curr_job.pkgconfig.dirname
         # do upload
         self.__curr_job = None
         return True
+    def __makepkg(self, job):
+        mkcmd = MAKEPKG_MAKE_CMD_CLEAN if job.pkgconfig.cleanbuild \
+                                       else MAKEPKG_MAKE_CMD
+        cwd = REPO_ROOT / job.pkgconfig.dirname
+        logger.info('makepkg in %s %s', job.pkgconfig.dirname, job.arch)
+        return mon_nspawn_shell(arch=job.arch, cwd=cwd, cmdline=mkcmd,
+                                logfile = cwd / 'buildbot.log.update',
+                                short_return = True)
+    def __clean(self, job):
+        cwd = REPO_ROOT / job.pkgconfig.dirname
+        logger.info('cleaning build dir for %s %s',
+                    job.pkgconfig.dirname, job.arch)
+        nspawn_shell(job.arch, 'rm -rf src pkg', cwd=cwd)
+    def __sign(self, job):
+        '''
+            wip
+        '''
+        cwd = REPO_ROOT / job.pkgconfig.dirname
+        print(nspawn_shell(job.arch, 'ls -l', cwd=cwd))
+        #nspawn_shell(job.arch, 'rm -rf src pkg', cwd=cwd)
+    def __upload(self, job):
+        '''
+            wip
+        '''
+        cwd = REPO_ROOT / job.pkgconfig.dirname
+        print(nspawn_shell(job.arch, 'ls -l', cwd=cwd))
+        #nspawn_shell(job.arch, 'rm -rf src pkg', cwd=cwd)
     def tick(self):
         '''
             check for updates,
             create new jobs
             and run them
         '''
-        if self.__curr_job is None:
+        if not self.__buildjobs:
+            # This part check for updates
             updates = updmgr.check_update()
             for update in updates:
-                (pkg, packagelist, ver) = update
-
-
+                (pkgconfig, ver, buildarchs) = update
+                march = True if len(buildarchs) >= 2 else False
+                for arch in buildarchs:
+                    newjob = Job(arch, pkgconfig, ver, multiarch=march)
+                    self._new_buildjob(newjob)
+        else:
+            # This part does the job
+            for job in self.__buildjobs:
+                cwd = REPO_ROOT / job.pkgconfig.dirname
+                if job.multiarch:
+                    # wip
+                    pass
+                else:
+                    self.__makepkg(job)
+                    self.__sign(job)
+                    self.__upload(job)
 jobsmgr = jobsManager()
 
 class updateManager:
@@ -109,28 +158,36 @@ class updateManager:
                 f.write(pkgvers)
             else:
                 logger.error('pkgver.json - Not writable')
-    def __get_package_list(self, dirname):
+    def __get_package_list(self, dirname, arch):
         pkgdir = REPO_ROOT / dirname
         assert pkgdir.exists()
-        pkglist = bash(MAKEPKG_PKGLIST_CMD, cwd=pkgdir)
+        pkglist = nspawn_shell(arch, MAKEPKG_PKGLIST_CMD, cwd=pkgdir)
         pkglist = pkglist.split('\n')
         return pkglist
-    def __get_new_ver(self, dirname):
-        pkgfiles = self.__get_package_list(dirname)
-        ver = get_pkg_details_from_name(pkgfiles[0])
-        return (ver, pkgfiles)
+    def __get_new_ver(self, dirname, arch):
+        pkgfiles = self.__get_package_list(dirname, arch)
+        ver = get_pkg_details_from_name(pkgfiles[0]).ver
+        return ver
     def check_update(self):
         updates = list()
         for pkg in jobsmgr.pkgconfigs:
             pkgdir = REPO_ROOT / pkg.dirname
             logger.info(f'checking update: {pkg.dirname}')
-            bash(MAKEPKG_UPD_CMD, cwd=pkgdir, RUN_CMD_TIMEOUT=60*60)
+            pkgbuild = pkgdir / 'PKGBUILD'
+            archs = get_arch_from_pkgbuild(pkgbuild)
+            buildarchs = [BUILD_ARCH_MAPPING.get(arch, None) for arch in archs]
+            buildarchs = [arch for arch in buildarchs if arch is not None]
+            # hopefully we only need to check one arch for update
+            arch = 'x86_64' if 'x86_64' in buildarchs else buildarchs[0] # prefer x86
+            mon_nspawn_shell(arch, MAKEPKG_UPD_CMD, cwd=pkgdir, minutes=60,
+                             logfile = pkgdir / 'buildbot.log.update',
+                             short_return = True)
             if pkg.type in ('git', 'manual'):
-                (ver, pkgfiles) = self.__get_new_ver(pkg.dirname)
+                ver = self.__get_new_ver(pkg.dirname, arch)
                 oldver = self.__pkgvers.get(pkg.dirname, None)
                 if oldver is None or vercmp(ver, oldver) == 1:
                     self.__pkgvers[pkg.dirname] = ver
-                    updates.append((pkg, pkgfiles, ver))
+                    updates.append((pkg, ver, buildarchs))
                 else:
                     logger.warning(f'package: {pkg.dirname} downgrade attempted')
             else:
@@ -174,6 +231,7 @@ if __name__ == '__main__':
                     if type(myrecv) is list and len(myrecv) == 3:
                         (funcname, args, kwargs) = myrecv
                         funcname = str(funcname)
+                        logger.info('running: %s %s %s', funcname, args, kwargs)
                         conn.send(run(funcname, args=args, kwargs=kwargs))
         except Exception:
             print_exc_plus()
