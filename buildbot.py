@@ -200,7 +200,8 @@ updmgr = updateManager()
 
 @background
 def __main():
-    pass
+    while True:
+        jobsmgr.tick()
 
 
 
