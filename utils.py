@@ -69,6 +69,7 @@ def run_cmd(cmd, cwd=None, keepalive=False, KEEPALIVE_TIMEOUT=30, RUN_CMD_TIMEOU
                 self.__file = open(logfile, 'w')
             else:
                 self.__file = None
+            return self
         def __exit__(self, type, value, traceback):
             if self.__file:
                 self.__file.close()
@@ -187,7 +188,7 @@ def get_pkg_details_from_name(name):
 def get_arch_from_pkgbuild(fpath):
     assert issubclass(type(fpath), os.PathLike)
     with open(fpath, 'r') as f:
-        for line in f.readline():
+        for line in f.read().split('\n'):
             if line.startswith('arch='):
                 matches = re.findall('[\'\"]([^\'\"]+)[\'\"]', line)
                 if not matches:

@@ -48,6 +48,8 @@ class pkgConfig:
         stages = ('prebuild', 'postbuild', 'update', 'failure')
         for stage in stages:
             setattr(self, stage, list())
+        if not self.__extra:
+            return
         for entry in self.__extra:
             assert type(entry) is dict and len(entry) == 1
             for k in entry:

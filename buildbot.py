@@ -163,6 +163,7 @@ class updateManager:
         assert pkgdir.exists()
         pkglist = nspawn_shell(arch, MAKEPKG_PKGLIST_CMD, cwd=pkgdir)
         pkglist = pkglist.split('\n')
+        pkglist = [line for line in pkglist if not line.startswith('+')]
         return pkglist
     def __get_new_ver(self, dirname, arch):
         pkgfiles = self.__get_package_list(dirname, arch)
@@ -201,7 +202,11 @@ updmgr = updateManager()
 @background
 def __main():
     while True:
-        jobsmgr.tick()
+        try:
+            jobsmgr.tick()
+        except:
+            print_exc_plus()
+        sleep(60)
 
 
 
