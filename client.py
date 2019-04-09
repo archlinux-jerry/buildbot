@@ -10,9 +10,9 @@ from time import sleep
 from config import REPOD_BIND_ADDRESS, REPOD_BIND_PASSWD
 from utils import print_exc_plus
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f'buildbot.{__name__}')
 
-def ping(funcname, args=list(), kwargs=dict(), retries=0):
+def run(funcname, args=list(), kwargs=dict(), retries=0):
     try:
         logger.info('client: %s %s %s',funcname, args, kwargs)
         with Client(REPOD_BIND_ADDRESS, authkey=REPOD_BIND_PASSWD) as conn:
@@ -35,6 +35,6 @@ def ping(funcname, args=list(), kwargs=dict(), retries=0):
 if __name__ == '__main__':
     import argparse
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-    logger.info('result: %s', ping('push_files', args=('aaa', 1)))
-    logger.info('result: %s', ping('add_files', args=('aaa',)))
-    #logger.info('result: %s', ping('update'))
+    logger.info('result: %s', run('push_files', args=('aaa', 1)))
+    logger.info('result: %s', run('add_files', args=('aaa',)))
+    #logger.info('result: %s', run('update'))

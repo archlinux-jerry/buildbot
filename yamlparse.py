@@ -9,7 +9,7 @@ from utils import print_exc_plus
 
 from config import PKGBUILD_DIR, AUTOBUILD_FNAME
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f'buildbot.{__name__}')
 
 abspath=os.path.abspath(__file__)
 abspath=os.path.dirname(abspath)

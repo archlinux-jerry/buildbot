@@ -8,8 +8,7 @@ from multiprocessing.connection import Listener
 from time import time, sleep
 from pathlib import Path
 from subprocess import CalledProcessError
-
-from utils import print_exc_plus
+import os
 
 from config import REPOD_BIND_ADDRESS, REPOD_BIND_PASSWD, REPO_PUSH_BANDWIDTH, \
                    GPG_VERIFY_CMD
@@ -22,11 +21,14 @@ from repo import _clean_archive as clean, \
                  _remove as remove, \
                  _update as update
 
-from utils import bash
+from utils import bash, configure_logger, print_exc_plus
 
+abspath=os.path.abspath(__file__)
+abspath=os.path.dirname(abspath)
+os.chdir(abspath)
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f'buildbot.{__name__}')
+configure_logger(logger, logfile='repod.log', rotate_size=1024*1024*10)
 
 class pushFm:
     def __init__(self):

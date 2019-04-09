@@ -22,7 +22,7 @@ from pathlib import Path
 from shutil import copyfile as __copy_file
 import logging
 from utils import bash, Pkg, get_pkg_details_from_name, \
-                  print_exc_plus
+                  print_exc_plus, configure_logger
 from time import time
 
 from config import REPO_NAME, PKG_COMPRESSION, ARCHS, REPO_CMD, \
@@ -34,7 +34,7 @@ repocwd = Path(abspath).parent / 'repo'
 repocwd.mkdir(mode=0o755, exist_ok=True)
 os.chdir(repocwd)
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f'buildbot.{__name__}')
 
 
 def symlink(dst, src, exist_ok=True):
@@ -313,7 +313,7 @@ def _remove(pkgnames, target_archs=[a for a in ARCHS if a != 'any']):
     return True
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    configure_logger(logger, logfile='repo.log', rotate_size=1024*1024*10)
     import argparse
     try:
         parser = argparse.ArgumentParser(description='Automatic management tool for an arch repo.')

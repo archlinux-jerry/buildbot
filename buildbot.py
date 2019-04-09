@@ -8,27 +8,34 @@ from multiprocessing.connection import Listener
 from time import time, sleep
 import os
 from pathlib import Path
+from shutil import rmtree
 from subprocess import CalledProcessError
+
+from shared_vars import PKG_SUFFIX, PKG_SIG_SUFFIX
 
 from config import ARCHS, BUILD_ARCHS, BUILD_ARCH_MAPPING, \
                    MASTER_BIND_ADDRESS, MASTER_BIND_PASSWD, \
                    PKGBUILD_DIR, MAKEPKG_PKGLIST_CMD, MAKEPKG_UPD_CMD, \
-                   MAKEPKG_MAKE_CMD, MAKEPKG_MAKE_CMD_CLEAN
+                   MAKEPKG_MAKE_CMD, MAKEPKG_MAKE_CMD_CLEAN, \
+                   GPG_SIGN_CMD, GPG_VERIFY_CMD, UPDATE_INTERVAL
 
 from utils import print_exc_plus, background, \
                   bash, get_pkg_details_from_name, vercmp, \
-                  nspawn_shell, mon_nspawn_shell, get_arch_from_pkgbuild
+                  nspawn_shell, mon_nspawn_shell, get_arch_from_pkgbuild, \
+                  configure_logger
+
+from client import run as rrun
 
 import json
 
 from yamlparse import load_all as load_all_yaml
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
 abspath=os.path.abspath(__file__)
 abspath=os.path.dirname(abspath)
 os.chdir(abspath)
+
+logger = logging.getLogger('buildbot')
+configure_logger(logger, logfile='buildbot.log', rotate_size=1024*1024*10)
 
 REPO_ROOT = Path(PKGBUILD_DIR)
 
@@ -47,6 +54,7 @@ class jobsManager:
         self.__uploadjobs = list()
         self.__curr_job = None
         self.pkgconfigs = load_all_yaml()
+        self.last_updatecheck = 0.0
     def _new_buildjob(self, job):
         assert type(job) is Job
         job_to_remove = list()
@@ -80,27 +88,33 @@ class jobsManager:
         cwd = REPO_ROOT / job.pkgconfig.dirname
         logger.info('makepkg in %s %s', job.pkgconfig.dirname, job.arch)
         return mon_nspawn_shell(arch=job.arch, cwd=cwd, cmdline=mkcmd,
-                                logfile = cwd / 'buildbot.log.update',
+                                logfile = cwd / 'buildbot.log.makepkg',
                                 short_return = True)
-    def __clean(self, job):
+    def __clean(self, job, remove_pkg=False):
         cwd = REPO_ROOT / job.pkgconfig.dirname
-        logger.info('cleaning build dir for %s %s',
-                    job.pkgconfig.dirname, job.arch)
-        nspawn_shell(job.arch, 'rm -rf src pkg', cwd=cwd)
+        logger.info('cleaning build dir for %s, %sremoving pkg',
+                    job.pkgconfig.dirname, '' if remove_pkg else 'not ')
+        for fpath in [f for f in cwd.iterdir()]:
+            fpath = Path()
+            if fpath.is_dir() and fpath.name in ('pkg', 'src'):
+                rmtree(fpath)
+            elif remove_pkg and fpath.is_file() and \
+                 (fpath.name.endswith(PKG_SUFFIX) or \
+                 fpath.name.endswith(PKG_SIG_SUFFIX)):
+                fpath.unlink()
     def __sign(self, job):
-        '''
-            wip
-        '''
         cwd = REPO_ROOT / job.pkgconfig.dirname
-        print(nspawn_shell(job.arch, 'ls -l', cwd=cwd))
-        #nspawn_shell(job.arch, 'rm -rf src pkg', cwd=cwd)
+        for fpath in cwd.iterdir():
+            if fpath.name.endswith(PKG_SUFFIX):
+                bash(f'{GPG_SIGN_CMD} {fpath.name}', cwd=cwd)
     def __upload(self, job):
         '''
             wip
         '''
         cwd = REPO_ROOT / job.pkgconfig.dirname
-        print(nspawn_shell(job.arch, 'ls -l', cwd=cwd))
+        print(bash('ls -l', cwd=cwd))
         #nspawn_shell(job.arch, 'rm -rf src pkg', cwd=cwd)
+        #rrun()
     def tick(self):
         '''
             check for updates,
@@ -109,6 +123,8 @@ class jobsManager:
         '''
         if not self.__buildjobs:
             # This part check for updates
+            if time() - self.last_updatecheck <= UPDATE_INTERVAL:
+                sleep(60)
             updates = updmgr.check_update()
             for update in updates:
                 (pkgconfig, ver, buildarchs) = update
@@ -118,15 +134,18 @@ class jobsManager:
                     self._new_buildjob(newjob)
         else:
             # This part does the job
-            for job in self.__buildjobs:
-                cwd = REPO_ROOT / job.pkgconfig.dirname
-                if job.multiarch:
-                    # wip
-                    pass
-                else:
-                    self.__makepkg(job)
-                    self.__sign(job)
-                    self.__upload(job)
+            job = self.__get_job()
+            cwd = REPO_ROOT / job.pkgconfig.dirname
+            if job.multiarch:
+                # wip
+                pass
+            else:
+                self.__makepkg(job)
+                self.__sign(job)
+                self.__upload(job)
+                if job.pkgconfig.cleanbuild:
+                    self.__clean(job ,remove_pkg=True)
+            self.__finish_job(job.pkgconfig.dirname)
 jobsmgr = jobsManager()
 
 class updateManager:
@@ -186,11 +205,20 @@ class updateManager:
             if pkg.type in ('git', 'manual'):
                 ver = self.__get_new_ver(pkg.dirname, arch)
                 oldver = self.__pkgvers.get(pkg.dirname, None)
-                if oldver is None or vercmp(ver, oldver) == 1:
+                has_update = False
+                if oldver:
+                    res = vercmp(ver, oldver)
+                    if res == 1:
+                        has_update = True
+                    elif res == -1:
+                        logger.warning(f'package: {pkg.dirname} downgrade attempted')
+                    elif res == 0:
+                        logger.info(f'package: {pkg.dirname} is up to date')
+                else:
+                    has_update = True
+                if has_update:
                     self.__pkgvers[pkg.dirname] = ver
                     updates.append((pkg, ver, buildarchs))
-                else:
-                    logger.warning(f'package: {pkg.dirname} downgrade attempted')
             else:
                 logger.warning(f'unknown package type: {pkg.type}')
         self._save()
@@ -206,7 +234,7 @@ def __main():
             jobsmgr.tick()
         except:
             print_exc_plus()
-        sleep(60)
+        sleep(1)
 
 
 

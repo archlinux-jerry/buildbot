@@ -39,6 +39,7 @@ GPG_SIGN_CMD = (f'gpg --default-key {GPG_KEY} --no-armor'
 
 #### config for buildbot.py
 
+UPDATE_INTERVAL = 60 # mins
 MASTER_BIND_ADDRESS = ('localhost', 7011)
 MASTER_BIND_PASSWD = b'mypassword'
 PKGBUILD_DIR = 'pkgbuilds'

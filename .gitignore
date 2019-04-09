@@ -1,6 +1,9 @@
 .vscode/*
 __pycache__/
 *.py[cod]
-buildbot.log*
-buildbot.sql
-test
+/buildbot.log*
+/repo.log*
+/repod.log*
+/test
+/pkgbuilds
+/repo/

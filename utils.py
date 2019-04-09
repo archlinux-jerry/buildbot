@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import subprocess
-import logging
-from time import time
+import logging, logging.handlers
+from time import time, sleep
 import re
 from threading import Thread, Lock
 from pathlib import Path
@@ -13,7 +13,7 @@ import traceback
 from config import PKG_COMPRESSION, SHELL_ARCH_ARM64, SHELL_ARCH_X64, \
                    CONTAINER_BUILDBOT_ROOT, ARCHS
 
-logger = logging.getLogger(name='utils')
+logger = logging.getLogger(f'buildbot.{__name__}')
 
 def background(func):
     def wrapped(*args, **kwargs):
@@ -40,9 +40,9 @@ def nspawn_shell(arch, cmdline, cwd=None, **kwargs):
     else:
         cwd = root
     if arch in ('aarch64', 'arm64'):
-        return bash(SHELL_ARCH_ARM64.format(command=f'cd \"{cwd}\" || exit 1; {cmdline}'))
+        return bash(SHELL_ARCH_ARM64.format(command=f'cd \"{cwd}\" || exit 1; {cmdline}'), **kwargs)
     elif arch in ('x64', 'x86', 'x86_64'):
-        return bash(SHELL_ARCH_X64.format(command=f'cd \"{cwd}\" || exit 1; {cmdline}'))
+        return bash(SHELL_ARCH_X64.format(command=f'cd \"{cwd}\" || exit 1; {cmdline}'), **kwargs)
     raise TypeError('nspawn_shell: wrong arch')
 
 def mon_nspawn_shell(arch, cmdline, cwd, minutes=30, **kwargs):
@@ -57,18 +57,20 @@ def run_cmd(cmd, cwd=None, keepalive=False, KEEPALIVE_TIMEOUT=30, RUN_CMD_TIMEOU
     stopped = False
     last_read = [int(time()), ""]
     class Output(list):
-        def append(self, mystring):
-            if not self.__short_return:
-                super().append(mystring)
-            if self.__file and type(mystring) is str:
-                self.__file.write(mystring)
-        def __enter__(self, logfile=None, short_return=False):
+        def __init__(self, logfile=None, short_return=False):
+            super().__init__()
             self.__short_return = short_return
             if logfile:
                 assert issubclass(type(logfile), os.PathLike)
                 self.__file = open(logfile, 'w')
             else:
                 self.__file = None
+        def append(self, mystring):
+            if not self.__short_return:
+                super().append(mystring)
+            if self.__file and type(mystring) is str:
+                self.__file.write(mystring)
+        def __enter__(self):
             return self
         def __exit__(self, type, value, traceback):
             if self.__file:
@@ -122,6 +124,8 @@ def run_cmd(cmd, cwd=None, keepalive=False, KEEPALIVE_TIMEOUT=30, RUN_CMD_TIMEOU
                         p.kill()
                     break
             else:
+                # sometimes the process ended too quickly and stdout is not captured
+                sleep(0.1)
                 stopped = True
                 break
         code = p.returncode
@@ -198,11 +202,15 @@ def get_arch_from_pkgbuild(fpath):
     raise TypeError('Unexpected PKGBUILD')
 
 def print_exc_plus():
+    logger.log(49, format_exc_plus())
+
+def format_exc_plus():
     """
     Print the usual traceback information, followed by a listing of all the
     local variables in each frame.
     from Python Cookbook by David Ascher, Alex Martelli
     """
+    ret = str()
     tb = sys.exc_info()[2]
     while True:
         if not tb.tb_next:
@@ -214,20 +222,50 @@ def print_exc_plus():
         stack.append(f)
         f = f.f_back
     stack.reverse()
-    traceback.print_exc()
-    print("Locals by frame, innermost last")
+    ret += traceback.format_exc()
+    ret += "\nLocals by frame, innermost last\n"
     for frame in stack:
-        print("Frame %s in %s at line %s" % (frame.f_code.co_name,
-                                             frame.f_code.co_filename,
-                                             frame.f_lineno))
+        ret += "Frame %s in %s at line %s\n" % (frame.f_code.co_name,
+                                                frame.f_code.co_filename,
+                                                frame.f_lineno)
         for key, value in frame.f_locals.items(  ):
-            print("\t%20s = " % key, end=' ')
+            ret += "\t%20s = " % key
             # We have to be VERY careful not to cause a new error in our error
             # printer! Calling str(  ) on an unknown object could cause an
             # error we don't want, so we must use try/except to catch it --
             # we can't stop it from happening, but we can and should
             # stop it from propagating if it does happen!
             try:
-                print(value)
+                ret += str(value)
             except:
-                print("<ERROR WHILE PRINTING VALUE>")
+                ret += "<ERROR WHILE PRINTING VALUE>"
+            ret += '\n'
+    return ret
+
+def configure_logger(logger, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                     level=logging.INFO, logfile=None, flevel=logging.INFO, rotate_size=None):
+    class ExceptionFormatter(logging.Formatter):
+        def format(self, record):
+            if record.levelno == 49:
+                record.msg = 'Exception caught.\nPrinting stack traceback\n' + record.msg
+            return super().format(record)
+
+    logger.setLevel(level)
+    formatter = ExceptionFormatter(fmt=format)
+    logging.addLevelName(49, 'Exception')
+    # create file handler
+    if logfile:
+        assert type(logfile) is str
+        if rotate_size and type(rotate_size) is int and rotate_size >= 1000:
+            fh = logging.handlers.RotatingFileHandler(logfile, mode='a',
+                                    maxBytes=rotate_size, backupCount=8)
+        else:
+            fh = logging.FileHandler(logfile)
+        fh.setLevel(flevel)
+        fh.setFormatter(formatter)
+        logger.addHandler(fh)
+    # create console handler
+    ch = logging.StreamHandler()
+    ch.setLevel(level)
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
