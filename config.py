@@ -33,8 +33,8 @@ GPG_VERIFY_CMD = 'gpg --verify'
 
 # Archlinux-Jerry Build Bot <buildbot@mail.jerryxiao.cc>
 GPG_KEY = 'BEE4F1D5A661CA1FEA65C38093962CE07A0D5B7D'
-GPG_SIGN_CMD = (f'gpg --default-key {GPG_KEY} --no-armor'
-                 '--pinentry-mode loopback --passphrase \'\''
+GPG_SIGN_CMD = (f'gpg --default-key {GPG_KEY} --no-armor '
+                 '--pinentry-mode loopback --passphrase \'\' '
                  '--detach-sign --yes --')
 
 #### config for buildbot.py

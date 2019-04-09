@@ -55,6 +55,7 @@ class jobsManager:
         self.__curr_job = None
         self.pkgconfigs = load_all_yaml()
         self.last_updatecheck = 0.0
+        self.idle = False
     def _new_buildjob(self, job):
         assert type(job) is Job
         job_to_remove = list()
@@ -124,9 +125,13 @@ class jobsManager:
         if not self.__buildjobs:
             # This part check for updates
             if time() - self.last_updatecheck <= UPDATE_INTERVAL:
+                if not self.idle:
+                    logger.info('Buildbot is idling for package updates.')
+                self.idle = True
                 sleep(60)
                 return
             self.last_updatecheck = time()
+            self.idle = False
             updates = updmgr.check_update()
             for update in updates:
                 (pkgconfig, ver, buildarchs) = update
