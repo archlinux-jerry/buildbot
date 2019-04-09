@@ -39,17 +39,20 @@ class pushFm:
     def start(self, fname, size):
         '''
             size is in MB
+            returns -1 when busy
         '''
         if self.is_busy():
-            return f'busy with {self.fname}'
+            return -1
         self.fname = fname
         self.start_time = time()
         self.size = size
         if size <= 7.5:
+            timeout = 120
             self.end_time = self.start_time + 120
         else:
-            self.end_time = self.start_time + size / (REPO_PUSH_BANDWIDTH / 8) * 2
-        return None
+            timeout = size / (REPO_PUSH_BANDWIDTH / 8) * 2
+        self.end_time = self.start_time + timeout
+        return timeout
     def tick(self):
         '''
             return None means success
@@ -107,11 +110,11 @@ class pushFm:
 
 pfm = pushFm()
 
-def push_files(filename, size):
+def push_start(filename, size):
     pfm.tick()
     return pfm.start(filename, size)
 
-def add_files(filename, overwrite=False):
+def push_done(filename, overwrite=False):
     return pfm.done(filename, overwrite=overwrite)
 
 
@@ -120,7 +123,7 @@ def add_files(filename, overwrite=False):
 
 def run(funcname, args=list(), kwargs=dict()):
     if funcname in ('clean', 'regenerate', 'remove',
-                    'update', 'push_files', 'add_files'):
+                    'update', 'push_start', 'push_done'):
         logger.info('running: %s %s %s', funcname, args, kwargs)
         ret = eval(funcname)(*args, **kwargs)
         logger.info('done: %s %s',funcname, ret)

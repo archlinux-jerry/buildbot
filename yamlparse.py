@@ -73,18 +73,20 @@ def load_all():
     pkgconfigs = list()
     for mydir in REPO_ROOT.iterdir():
         try:
-            if mydir.is_dir() and (mydir / AUTOBUILD_FNAME).exists():
-                # parsing yaml
-                logger.info('Bulidbot: found %s in %s', AUTOBUILD_FNAME,
-                                                        mydir / AUTOBUILD_FNAME)
-                with open(mydir / AUTOBUILD_FNAME, 'r') as f:
-                    content = f.read()
-                    content = load(content, Loader=Loader)
-                    assert type(content) is dict
-                    args = [content.get(part, None) for part in \
-                            ('type', 'cleanbuild', 'timeout', 'extra')]
-                    args = [mydir.name] + args
-                    pkgconfigs.append(pkgConfig(*args))
+            if mydir.is_dir():
+                if (mydir / AUTOBUILD_FNAME).exists():
+                    # parsing yaml
+                    logger.info('Bulidbot: found %s in %s', AUTOBUILD_FNAME, mydir)
+                    with open(mydir / AUTOBUILD_FNAME, 'r') as f:
+                        content = f.read()
+                        content = load(content, Loader=Loader)
+                        assert type(content) is dict
+                        args = [content.get(part, None) for part in \
+                                ('type', 'cleanbuild', 'timeout', 'extra')]
+                        args = [mydir.name] + args
+                        pkgconfigs.append(pkgConfig(*args))
+                else:
+                    logger.warning('Bulidbot: NO %s in %s', AUTOBUILD_FNAME, mydir)
         except Exception:
             logger.error(f'Error while parsing {AUTOBUILD_FNAME} for {mydir.name}')
             print_exc_plus()

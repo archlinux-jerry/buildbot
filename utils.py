@@ -11,6 +11,7 @@ import sys
 import traceback
 
 from config import PKG_COMPRESSION, SHELL_ARCH_ARM64, SHELL_ARCH_X64, \
+                   SHELL_ARM64_ADDITIONAL, SHELL_TRAP, \
                    CONTAINER_BUILDBOT_ROOT, ARCHS
 
 logger = logging.getLogger(f'buildbot.{__name__}')
@@ -28,10 +29,10 @@ def bash(cmdline, **kwargs):
     logger.info(f'bash: {cmdline}, kwargs: {kwargs}')
     return(run_cmd(['/bin/bash', '-x', '-e', '-c', cmdline], **kwargs))
 
-def mon_bash(cmdline, cwd=None, minutes=30, **kwargs):
-    assert type(minutes) is int and minutes >= 1
-    return bash(cmdline, cwd=cwd, keepalive=True, KEEPALIVE_TIMEOUT=60,
-                RUN_CMD_TIMEOUT=minutes*60, **kwargs)
+def mon_bash(cmdline, seconds=60*30, **kwargs):
+    assert type(seconds) is int and seconds >= 1
+    return bash(cmdline, keepalive=True, KEEPALIVE_TIMEOUT=60,
+                RUN_CMD_TIMEOUT=seconds, **kwargs)
 
 def nspawn_shell(arch, cmdline, cwd=None, **kwargs):
     root = Path(CONTAINER_BUILDBOT_ROOT)
@@ -39,22 +40,23 @@ def nspawn_shell(arch, cmdline, cwd=None, **kwargs):
         cwd = root / cwd
     else:
         cwd = root
+    logger.info(f'bash_{arch}: {cmdline}, cwd: {cwd}, kwargs: {kwargs}')
     if arch in ('aarch64', 'arm64'):
-        ret = bash(SHELL_ARCH_ARM64.format(
-            command=f'cd \"{cwd}\" || echo \"++ exit 1\" && exit 1; {cmdline}; echo \"++ exit $?\"'), **kwargs)
+        command=f'{SHELL_ARM64_ADDITIONAL}; {SHELL_TRAP}; cd \'{cwd}\'; {cmdline}'
+        ret = run_cmd(SHELL_ARCH_ARM64 + [command,], **kwargs)
     elif arch in ('x64', 'x86', 'x86_64'):
-        ret = bash(SHELL_ARCH_X64.format(
-            command=f'cd \"{cwd}\" || echo \"++ exit 1\" && exit 1; {cmdline}; echo \"++ exit $?\"'), **kwargs)
+        command=f'{SHELL_TRAP}; cd \'{cwd}\'; {cmdline}'
+        ret = run_cmd(SHELL_ARCH_X64 + [command,], **kwargs)
     else:
         raise TypeError('nspawn_shell: wrong arch')
     if not ret.endswith('++ exit 0\n'):
         raise subprocess.CalledProcessError(1, cmdline, ret)
     return ret
 
-def mon_nspawn_shell(arch, cmdline, cwd, minutes=30, **kwargs):
-    assert type(minutes) is int and minutes >= 1
+def mon_nspawn_shell(arch, cmdline, cwd, seconds=60*30, **kwargs):
+    assert type(seconds) is int and seconds >= 1
     return nspawn_shell(arch, cmdline, cwd=cwd, keepalive=True, KEEPALIVE_TIMEOUT=60,
-                        RUN_CMD_TIMEOUT=minutes*60, **kwargs)
+                        RUN_CMD_TIMEOUT=seconds, **kwargs)
 
 def run_cmd(cmd, cwd=None, keepalive=False, KEEPALIVE_TIMEOUT=30, RUN_CMD_TIMEOUT=60,
             logfile=None, short_return=False):
@@ -96,7 +98,6 @@ def run_cmd(cmd, cwd=None, keepalive=False, KEEPALIVE_TIMEOUT=30, RUN_CMD_TIMEOU
                     continue
                 line.replace('\x0f', '\n')
                 last_read_time = int(time())
-                logger.debug(line)
                 output.append(line)
                 last_read[0] = last_read_time
                 last_read[1] = line
@@ -253,7 +254,7 @@ def format_exc_plus():
             ret += '\n'
     return ret
 
-def configure_logger(logger, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+def configure_logger(logger, format='%(asctime)s - %(name)-18s - %(levelname)s - %(message)s',
                      level=logging.INFO, logfile=None, flevel=logging.INFO, rotate_size=None):
     class ExceptionFormatter(logging.Formatter):
         def format(self, record):

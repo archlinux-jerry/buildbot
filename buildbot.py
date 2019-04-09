@@ -17,12 +17,13 @@ from config import ARCHS, BUILD_ARCHS, BUILD_ARCH_MAPPING, \
                    MASTER_BIND_ADDRESS, MASTER_BIND_PASSWD, \
                    PKGBUILD_DIR, MAKEPKG_PKGLIST_CMD, MAKEPKG_UPD_CMD, \
                    MAKEPKG_MAKE_CMD, MAKEPKG_MAKE_CMD_CLEAN, \
-                   GPG_SIGN_CMD, GPG_VERIFY_CMD, UPDATE_INTERVAL
+                   GPG_SIGN_CMD, GPG_VERIFY_CMD, UPDATE_INTERVAL, \
+                   MAKEPKG_MAKE_CMD_MARCH, UPLOAD_CMD
 
 from utils import print_exc_plus, background, \
                   bash, get_pkg_details_from_name, vercmp, \
                   nspawn_shell, mon_nspawn_shell, get_arch_from_pkgbuild, \
-                  configure_logger
+                  configure_logger, mon_bash
 
 from client import run as rrun
 
@@ -84,24 +85,30 @@ class jobsManager:
         self.__curr_job = None
         return True
     def __makepkg(self, job):
-        mkcmd = MAKEPKG_MAKE_CMD_CLEAN if job.pkgconfig.cleanbuild \
-                                       else MAKEPKG_MAKE_CMD
         cwd = REPO_ROOT / job.pkgconfig.dirname
+        if job.multiarch:
+            # assume a clean env, no source avail
+            mkcmd = MAKEPKG_MAKE_CMD_MARCH
+        else:
+            mkcmd = MAKEPKG_MAKE_CMD_CLEAN if job.pkgconfig.cleanbuild \
+                                        else MAKEPKG_MAKE_CMD
         logger.info('makepkg in %s %s', job.pkgconfig.dirname, job.arch)
         return mon_nspawn_shell(arch=job.arch, cwd=cwd, cmdline=mkcmd,
                                 logfile = cwd / 'buildbot.log.makepkg',
-                                short_return = True)
-    def __clean(self, job, remove_pkg=False):
+                                short_return = True,
+                                seconds=job.pkgconfig.timeout*60)
+    def __clean(self, job, remove_pkg=False, rm_src=True):
         cwd = REPO_ROOT / job.pkgconfig.dirname
         logger.info('cleaning build dir for %s, %sremoving pkg',
                     job.pkgconfig.dirname, '' if remove_pkg else 'not ')
         for fpath in [f for f in cwd.iterdir()]:
-            fpath = Path()
-            if fpath.is_dir() and fpath.name in ('pkg', 'src'):
+            if rm_src and fpath.is_dir() and \
+                          fpath.name in ('pkg', 'src'):
                 rmtree(fpath)
             elif remove_pkg and fpath.is_file() and \
+                 ((not job.multiarch) or job.arch in fpath.name) and \
                  (fpath.name.endswith(PKG_SUFFIX) or \
-                 fpath.name.endswith(PKG_SIG_SUFFIX)):
+                  fpath.name.endswith(PKG_SIG_SUFFIX)):
                 fpath.unlink()
     def __sign(self, job):
         cwd = REPO_ROOT / job.pkgconfig.dirname
@@ -113,9 +120,27 @@ class jobsManager:
             wip
         '''
         cwd = REPO_ROOT / job.pkgconfig.dirname
-        print(bash('ls -l', cwd=cwd))
-        #nspawn_shell(job.arch, 'rm -rf src pkg', cwd=cwd)
-        #rrun()
+        f_to_upload = list()
+        for fpath in cwd.iterdir():
+            if fpath.name.endswith(PKG_SUFFIX) and \
+               get_pkg_details_from_name(fpath.name).ver == job.version:
+                sigpath = fpath.parent / f'{fpath.name}.sig'
+                assert sigpath.exists()
+                f_to_upload.append(sigpath)
+                f_to_upload.append(fpath)
+        for f in f_to_upload:
+            size = f.stat().st_size / 1000 / 1000
+            timeout = rrun('push_start', args=(f.name, size))
+            logger.info(f'Uploading {f}, timeout in {timeout}s')
+            assert timeout > 0
+            mon_bash(f'{UPLOAD_CMD} \"{f}\"', seconds=timeout)
+            if f.name.endswith(PKG_SUFFIX):
+                logger.info(f'Requesting repo update for {f.name}')
+                res = rrun('push_done', kwargs={'overwrite': False,})
+                if res is None:
+                    logger.info(f'Update success for {f.name}')
+                else:
+                    logger.error(f'Update failed for {f.name}, reason: {res}')
     def tick(self):
         '''
             check for updates,
@@ -142,16 +167,19 @@ class jobsManager:
         else:
             # This part does the job
             job = self.__get_job()
-            cwd = REPO_ROOT / job.pkgconfig.dirname
             if job.multiarch:
-                # wip
-                pass
+                self.__clean(job, remove_pkg=True)
+                self.__sign(job)
+                self.__upload(job)
+                self.__clean(job, remove_pkg=True)
             else:
                 self.__makepkg(job)
                 self.__sign(job)
                 self.__upload(job)
                 if job.pkgconfig.cleanbuild:
-                    self.__clean(job ,remove_pkg=True)
+                    self.__clean(job, remove_pkg=True)
+                else:
+                    self.__clean(job, rm_src=False, remove_pkg=True)
             self.__finish_job(job.pkgconfig.dirname)
 jobsmgr = jobsManager()
 
@@ -206,7 +234,7 @@ class updateManager:
             buildarchs = [arch for arch in buildarchs if arch is not None]
             # hopefully we only need to check one arch for update
             arch = 'x86_64' if 'x86_64' in buildarchs else buildarchs[0] # prefer x86
-            mon_nspawn_shell(arch, MAKEPKG_UPD_CMD, cwd=pkgdir, minutes=60,
+            mon_nspawn_shell(arch, MAKEPKG_UPD_CMD, cwd=pkgdir, seconds=60*60,
                              logfile = pkgdir / 'buildbot.log.update',
                              short_return = True)
             if pkg.type in ('git', 'manual'):
@@ -234,24 +262,13 @@ class updateManager:
 updmgr = updateManager()
 
 
-@background
-def __main():
-    while True:
-        try:
-            jobsmgr.tick()
-        except:
-            print_exc_plus()
-        sleep(1)
 
 
-
-
-
-
+def info(*args, **kwargs):
+    return (args, kwargs)
 
 def run(funcname, args=list(), kwargs=dict()):
-    if funcname in ('clean', 'regenerate', 'remove',
-                    'update', 'push_files', 'add_files'):
+    if funcname in ('info',):
         logger.info('running: %s %s %s',funcname, args, kwargs)
         ret = eval(funcname)(*args, **kwargs)
         logger.info('done: %s %s',funcname, ret)
@@ -260,9 +277,8 @@ def run(funcname, args=list(), kwargs=dict()):
         logger.error('unexpected: %s %s %s',funcname, args, kwargs)
         return False
 
-
-if __name__ == '__main__':
-    __main() # start the main worker thread
+@background
+def __main():
     while True:
         try:
             with Listener(MASTER_BIND_ADDRESS, authkey=MASTER_BIND_PASSWD) as listener:
@@ -276,7 +292,18 @@ if __name__ == '__main__':
                         conn.send(run(funcname, args=args, kwargs=kwargs))
         except Exception:
             print_exc_plus()
+
+if __name__ == '__main__':
+    logger.info('Buildbot started.')
+    __main() # start the Listener thread
+    logger.info('Listener started.')
+    while True:
+        try:
+            jobsmgr.tick()
+        except Exception:
+            print_exc_plus()
         except KeyboardInterrupt:
             logger.info('KeyboardInterrupt')
             print_exc_plus()
             break
+        sleep(1)

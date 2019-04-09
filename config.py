@@ -48,10 +48,14 @@ MAKEPKG = 'makepkg --nosign --needed --noconfirm --noprogressbar --nocolor'
 MAKEPKG_UPD_CMD = 'makepkg --syncdeps --nobuild'
 MAKEPKG_MAKE_CMD = 'makepkg --syncdeps --noextract'
 MAKEPKG_MAKE_CMD_CLEAN = 'makepkg --syncdeps --noextract --clean --cleanbuild'
+MAKEPKG_MAKE_CMD_MARCH = 'makepkg --syncdeps --clean --cleanbuild'
 
 MAKEPKG_PKGLIST_CMD = f'{MAKEPKG} --packagelist'
 
 CONTAINER_BUILDBOT_ROOT = 'shared/buildbot'
-# single quote may cause problem here
-SHELL_ARCH_X64 = 'sudo machinectl --quiet shell build@archlinux /bin/bash -c \'{command}\''
-SHELL_ARCH_ARM64 = 'sudo machinectl --quiet shell root@alarm /bin/bash -c $\'su -l alarm -c \\\'{command}\\\'\''
+SHELL_ARCH_X64 = ['/usr/bin/sudo', 'machinectl', '--quiet', 'shell', 'build@archlinux', '/bin/bash', '-x', '-e', '-c']
+SHELL_ARCH_ARM64 = ['/usr/bin/sudo', 'machinectl', '--quiet', 'shell', 'root@alarm', '/bin/su', '-l', 'alarm', '-c']
+SHELL_ARM64_ADDITIONAL = 'set -e; set -x'
+SHELL_TRAP = 'trap \'echo ++ exit $?\' ERR EXIT'
+
+UPLOAD_CMD = 'rsync -avPh {src} repoupload:/srv/repo/buildbot/repo/updates/'
