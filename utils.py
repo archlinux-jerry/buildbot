@@ -40,10 +40,16 @@ def nspawn_shell(arch, cmdline, cwd=None, **kwargs):
     else:
         cwd = root
     if arch in ('aarch64', 'arm64'):
-        return bash(SHELL_ARCH_ARM64.format(command=f'cd \"{cwd}\" || exit 1; {cmdline}'), **kwargs)
+        ret = bash(SHELL_ARCH_ARM64.format(
+            command=f'cd \"{cwd}\" || echo \"++ exit 1\" && exit 1; {cmdline}; echo \"++ exit $?\"'), **kwargs)
     elif arch in ('x64', 'x86', 'x86_64'):
-        return bash(SHELL_ARCH_X64.format(command=f'cd \"{cwd}\" || exit 1; {cmdline}'), **kwargs)
-    raise TypeError('nspawn_shell: wrong arch')
+        ret = bash(SHELL_ARCH_X64.format(
+            command=f'cd \"{cwd}\" || echo \"++ exit 1\" && exit 1; {cmdline}; echo \"++ exit $?\"'), **kwargs)
+    else:
+        raise TypeError('nspawn_shell: wrong arch')
+    if not ret.endswith('++ exit 0\n'):
+        raise subprocess.CalledProcessError(1, cmdline, ret)
+    return ret
 
 def mon_nspawn_shell(arch, cmdline, cwd, minutes=30, **kwargs):
     assert type(minutes) is int and minutes >= 1
@@ -66,7 +72,11 @@ def run_cmd(cmd, cwd=None, keepalive=False, KEEPALIVE_TIMEOUT=30, RUN_CMD_TIMEOU
             else:
                 self.__file = None
         def append(self, mystring):
-            if not self.__short_return:
+            if self.__short_return:
+                if len(super()) >= 20:
+                    super.pop(0)
+                super().append(mystring)
+            else:
                 super().append(mystring)
             if self.__file and type(mystring) is str:
                 self.__file.write(mystring)
@@ -84,6 +94,10 @@ def run_cmd(cmd, cwd=None, keepalive=False, KEEPALIVE_TIMEOUT=30, RUN_CMD_TIMEOU
             last_read_time = int(time())
             while stopped is False:
                 line = stdout.readline(4096)
+                if line is '':
+                    sleep(0.05)
+                    continue
+                line.replace('\x0f', '\n')
                 last_read_time = int(time())
                 logger.debug(line)
                 output.append(line)
