@@ -119,6 +119,7 @@ class jobsManager:
         '''
             wip
         '''
+        suc = True
         cwd = REPO_ROOT / job.pkgconfig.dirname
         f_to_upload = list()
         for fpath in cwd.iterdir():
@@ -130,17 +131,27 @@ class jobsManager:
                 f_to_upload.append(fpath)
         for f in f_to_upload:
             size = f.stat().st_size / 1000 / 1000
-            timeout = rrun('push_start', args=(f.name, size))
+            if f.name.endswith(PKG_SUFFIX):
+                for _ in range(10):
+                    timeout = rrun('push_start', args=(f.name, size))
+                    if timeout > 0:
+                        break
+                    else:
+                        logger.warning('Remote is busy (-1), wait 1 min x10')
+                        sleep(60)
+            else:
+                timeout = 60
             logger.info(f'Uploading {f}, timeout in {timeout}s')
-            assert timeout > 0
-            mon_bash(f'{UPLOAD_CMD} \"{f}\"', seconds=timeout)
+            mon_bash(UPLOAD_CMD.format(src=f), seconds=timeout)
             if f.name.endswith(PKG_SUFFIX):
                 logger.info(f'Requesting repo update for {f.name}')
-                res = rrun('push_done', kwargs={'overwrite': False,})
+                res = rrun('push_done', args=(f.name,), kwargs={'overwrite': False,})
                 if res is None:
                     logger.info(f'Update success for {f.name}')
                 else:
                     logger.error(f'Update failed for {f.name}, reason: {res}')
+                    suc = False
+        return suc
     def tick(self):
         '''
             check for updates,
@@ -170,16 +181,16 @@ class jobsManager:
             if job.multiarch:
                 self.__clean(job, remove_pkg=True)
                 self.__sign(job)
-                self.__upload(job)
-                self.__clean(job, remove_pkg=True)
+                if self.__upload(job):
+                    self.__clean(job, remove_pkg=True)
             else:
                 self.__makepkg(job)
                 self.__sign(job)
-                self.__upload(job)
-                if job.pkgconfig.cleanbuild:
-                    self.__clean(job, remove_pkg=True)
-                else:
-                    self.__clean(job, rm_src=False, remove_pkg=True)
+                if self.__upload(job):
+                    if job.pkgconfig.cleanbuild:
+                        self.__clean(job, remove_pkg=True)
+                    else:
+                        self.__clean(job, rm_src=False, remove_pkg=True)
             self.__finish_job(job.pkgconfig.dirname)
 jobsmgr = jobsManager()
 

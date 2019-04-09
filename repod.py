@@ -27,7 +27,7 @@ abspath=os.path.abspath(__file__)
 abspath=os.path.dirname(abspath)
 os.chdir(abspath)
 
-logger = logging.getLogger(f'buildbot.{__name__}')
+logger = logging.getLogger('buildbot')
 configure_logger(logger, logfile='repod.log', rotate_size=1024*1024*10)
 
 class pushFm:
@@ -75,7 +75,8 @@ class pushFm:
         '''
         if fname == self.fname:
             try:
-                update_path = Path('updates')
+                REPO_ROOT = Path('repo')
+                update_path = REPO_ROOT / 'updates'
                 pkg_found = False
                 sig_found = False
                 for fpath in update_path.iterdir():

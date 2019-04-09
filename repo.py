@@ -34,7 +34,7 @@ repocwd = Path(abspath).parent / 'repo'
 repocwd.mkdir(mode=0o755, exist_ok=True)
 os.chdir(repocwd)
 
-logger = logging.getLogger(f'buildbot.{__name__}')
+logger = logging.getLogger('buildbot')
 
 
 def symlink(dst, src, exist_ok=True):
