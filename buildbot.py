@@ -125,6 +125,8 @@ class jobsManager:
             # This part check for updates
             if time() - self.last_updatecheck <= UPDATE_INTERVAL:
                 sleep(60)
+                return
+            self.last_updatecheck = time()
             updates = updmgr.check_update()
             for update in updates:
                 (pkgconfig, ver, buildarchs) = update
