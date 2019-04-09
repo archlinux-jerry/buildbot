@@ -209,7 +209,8 @@ def get_arch_from_pkgbuild(fpath):
                 matches = re.findall('[\'\"]([^\'\"]+)[\'\"]', line)
                 if not matches:
                     raise TypeError('Unexpected PKGBUILD format')
-                assert not [None for match in matches if match not in ARCHS]
+                matches = [arch for arch in matches if arch in ARCHS]
+                assert matches
                 return matches
     raise TypeError('Unexpected PKGBUILD')
 
