@@ -124,7 +124,7 @@ class jobsManager:
         '''
         if not self.__buildjobs:
             # This part check for updates
-            if time() - self.last_updatecheck <= UPDATE_INTERVAL:
+            if time() - self.last_updatecheck <= UPDATE_INTERVAL * 60:
                 if not self.idle:
                     logger.info('Buildbot is idling for package updates.')
                 self.idle = True
