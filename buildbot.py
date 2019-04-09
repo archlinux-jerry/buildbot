@@ -54,7 +54,7 @@ class jobsManager:
         self.__buildjobs = list()
         self.__uploadjobs = list()
         self.__curr_job = None
-        self.pkgconfigs = load_all_yaml()
+        self.pkgconfigs = None
         self.last_updatecheck = 0.0
         self.idle = False
     def _new_buildjob(self, job):
@@ -168,6 +168,7 @@ class jobsManager:
                 return
             self.last_updatecheck = time()
             self.idle = False
+            self.pkgconfigs = load_all_yaml()
             updates = updmgr.check_update()
             for update in updates:
                 (pkgconfig, ver, buildarchs) = update
