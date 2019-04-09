@@ -72,12 +72,9 @@ def run_cmd(cmd, cwd=None, keepalive=False, KEEPALIVE_TIMEOUT=30, RUN_CMD_TIMEOU
             else:
                 self.__file = None
         def append(self, mystring):
-            if self.__short_return:
-                if super().__len__() >= 20:
-                    super.pop(0)
-                super().append(mystring)
-            else:
-                super().append(mystring)
+            if self.__short_return and super().__len__() >= 20:
+                super().pop(0)
+            super().append(mystring)
             if self.__file and type(mystring) is str:
                 self.__file.write(mystring)
         def __enter__(self):
