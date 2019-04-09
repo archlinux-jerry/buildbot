@@ -75,12 +75,11 @@ class pushFm:
         '''
         if fname == self.fname:
             try:
-                REPO_ROOT = Path('repo')
-                update_path = REPO_ROOT / 'updates'
+                update_path = Path('updates')
                 pkg_found = False
                 sig_found = False
                 for fpath in update_path.iterdir():
-                    if fpath.is_dir:
+                    if fpath.is_dir():
                         continue
                     if fpath.name == self.fname:
                         pkg_found = fpath
