@@ -73,7 +73,7 @@ def run_cmd(cmd, cwd=None, keepalive=False, KEEPALIVE_TIMEOUT=30, RUN_CMD_TIMEOU
                 self.__file = None
         def append(self, mystring):
             if self.__short_return:
-                if len(super()) >= 20:
+                if super().__len__() >= 20:
                     super.pop(0)
                 super().append(mystring)
             else:
