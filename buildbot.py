@@ -181,6 +181,7 @@ class jobsManager:
             job = self.__get_job()
             if job.multiarch:
                 self.__clean(job, remove_pkg=True)
+                self.__makepkg(job)
                 self.__sign(job)
                 if self.__upload(job):
                     self.__clean(job, remove_pkg=True)
