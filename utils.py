@@ -79,6 +79,7 @@ def run_cmd(cmd, cwd=None, keepalive=False, KEEPALIVE_TIMEOUT=30, RUN_CMD_TIMEOU
             super().append(mystring)
             if self.__file and type(mystring) is str:
                 self.__file.write(mystring)
+                self.__file.flush()
         def __enter__(self):
             return self
         def __exit__(self, type, value, traceback):
