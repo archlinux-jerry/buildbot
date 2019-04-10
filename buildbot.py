@@ -131,15 +131,15 @@ class jobsManager:
     def __get_job(self):
         if self.__curr_job:
             logger.error(f'Job {self.__curr_job} failed')
-            self.__finish_job(self.__curr_job)
+            self.__finish_job(self.__curr_job, force=True)
             return self.__get_job()
         jobs = self.__buildjobs
         if jobs:
             self.__curr_job = jobs.pop(0)
             return self.__curr_job
-    def __finish_job(self, pkgdir):
-        assert pkgdir == self.__curr_job.pkgconfig.dirname
-        # do upload
+    def __finish_job(self, pkgdir, force=False):
+        if not force:
+            assert pkgdir == self.__curr_job.pkgconfig.dirname
         self.__curr_job = None
         return True
     def __makepkg(self, job):
