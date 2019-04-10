@@ -200,7 +200,7 @@ class jobsManager:
             else:
                 timeout = 60
             logger.info(f'Uploading {f}, timeout in {timeout}s')
-            mon_bash(UPLOAD_CMD.format(src=f), seconds=timeout)
+            mon_bash(UPLOAD_CMD.format(src=f), seconds=int(timeout))
             if f.name.endswith(PKG_SUFFIX):
                 logger.info(f'Requesting repo update for {f.name}')
                 res = rrun('push_done', args=(f.name,), kwargs={'overwrite': False,})
