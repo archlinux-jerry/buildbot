@@ -41,12 +41,16 @@ if __name__ == '__main__':
     configure_logger(logger)
     try:
         parser = argparse.ArgumentParser(description='Client for buildbot')
+        parser.add_argument('--info', action='store_true', help='show buildbot info')
         parser.add_argument('--update', action='store_true', help='update pushed files to the repo')
         parser.add_argument('--cleanall', action='store_true', help='checkout pkgbuilds')
         parser.add_argument('--clean', nargs='?', default=None, help='checkout pkgbuilds in one package')
         parser.add_argument('--rebuild', nargs='?', default=None, help='rebuild a package with its dirname')
         args = parser.parse_args()
-        if args.update:
+        if args.info:
+            server=(MASTER_BIND_ADDRESS, MASTER_BIND_PASSWD)
+            logger.info(run('info', server=server))
+        elif args.update:
             server=(REPOD_BIND_ADDRESS, REPOD_BIND_PASSWD)
             logger.info(run('update', kwargs={'overwrite': False}, server=server))
         elif args.cleanall:
