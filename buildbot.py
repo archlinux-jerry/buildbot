@@ -326,6 +326,8 @@ class updateManager:
                 ver = self.__get_new_ver(pkg.dirname, arch)
                 oldver = self.__pkgvers.get(pkg.dirname, None)
                 has_update = False
+                if rebuild_package:
+                    has_update = True
                 if oldver:
                     res = vercmp(ver, oldver)
                     if res == 1:
