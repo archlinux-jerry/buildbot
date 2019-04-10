@@ -268,6 +268,7 @@ def _update(overwrite=False):
                                 logger.warning('Same version is already in the repo.')
                                 throw_away(pkg_to_add)
                                 should_continue = True
+                                break
                         if should_continue:
                             continue
                     copyfile(pkg_to_add, pkg_nlocation)
