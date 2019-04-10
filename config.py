@@ -59,3 +59,6 @@ SHELL_ARM64_ADDITIONAL = 'set -e; set -x'
 SHELL_TRAP = 'trap \'echo ++ exit $?\' ERR EXIT'
 
 UPLOAD_CMD = 'rsync -avPh \"{src}\" repoupload:/srv/repo/buildbot/repo/updates/'
+
+GIT_PULL = 'git pull'
+GIT_RESET_SUBDIR = 'git checkout HEAD -- .'

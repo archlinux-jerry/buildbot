@@ -65,7 +65,7 @@ class pkgConfig:
                 'dirname', 'type', 'cleanbuild', 'timeout'
                 'prebuild', 'postbuild', 'update', 'failure'
             ):
-            ret += f'{myproperty}={getattr(self, myproperty)},'
+            ret += f'{myproperty}={getattr(self, myproperty, None)},'
         ret += ')'
         return ret
 

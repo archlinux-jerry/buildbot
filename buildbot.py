@@ -18,7 +18,8 @@ from config import ARCHS, BUILD_ARCHS, BUILD_ARCH_MAPPING, \
                    PKGBUILD_DIR, MAKEPKG_PKGLIST_CMD, MAKEPKG_UPD_CMD, \
                    MAKEPKG_MAKE_CMD, MAKEPKG_MAKE_CMD_CLEAN, \
                    GPG_SIGN_CMD, GPG_VERIFY_CMD, UPDATE_INTERVAL, \
-                   MAKEPKG_MAKE_CMD_MARCH, UPLOAD_CMD
+                   MAKEPKG_MAKE_CMD_MARCH, UPLOAD_CMD, \
+                   GIT_PULL, GIT_RESET_SUBDIR
 
 from utils import print_exc_plus, background, \
                   bash, get_pkg_details_from_name, vercmp, \
@@ -48,7 +49,14 @@ class Job:
         self.version = version
         self.multiarch = multiarch
         self.added = time()
-
+    def __repr__(self):
+        ret = "Job("
+        for myproperty in (
+            'arch', 'pkgconfig', 'version', 'multiarch', 'added'
+            ):
+            ret += f'{myproperty}={getattr(self, myproperty, None)},'
+        ret += ')'
+        return ret
 class jobsManager:
     def __init__(self):
         self.__buildjobs = list()
@@ -57,6 +65,52 @@ class jobsManager:
         self.pkgconfigs = None
         self.last_updatecheck = 0.0
         self.idle = False
+    def __repr__(self):
+        ret = "jobsManager("
+        for myproperty in (
+            '__buildjobs', '__uploadjobs', '__curr_job',
+            'pkgconfigs', 'last_updatecheck', 'idle'
+            ):
+            ret += f'{myproperty}={getattr(self, myproperty, None)},'
+        ret += ')'
+        return ret
+    def reset_dir(self, pkgdirname=None, all=False):
+        if all:
+            logger.info('git checkout all: %s', bash(GIT_RESET_SUBDIR, cwd=REPO_ROOT))
+        else:
+            if not pkgdirname:
+                return False
+            cwd = REPO_ROOT / pkgdirname
+            if cwd.exists():
+                logger.info('git checkout: %s', bash(GIT_RESET_SUBDIR, cwd=cwd))
+                for fpath in [f for f in cwd.iterdir()]:
+                    if fpath.is_dir() and \
+                            fpath.name in ('pkg', 'src'):
+                        rmtree(fpath)
+                    elif fpath.is_file() and \
+                            (fpath.name.endswith(PKG_SUFFIX) or \
+                             fpath.name.endswith(PKG_SIG_SUFFIX)):
+                        fpath.unlink()
+            else:
+                return False
+        return True
+    def rebuild_package(self, pkgdirname, clean=False):
+        self.pkgconfigs = load_all_yaml()
+        updates = updmgr.check_update(rebuild_package=pkgdirname)
+        if updates and len(updates) == 1:
+            if clean:
+                self.reset_dir(pkgdirname)
+            (pkgconfig, ver, buildarchs) = updates[0]
+            march = True if len(buildarchs) >= 2 else False
+            for arch in buildarchs:
+                newjob = Job(arch, pkgconfig, ver, multiarch=march)
+                self._new_buildjob(newjob)
+            ret = f'rebuild job added for {pkgdirname} {" ".join(buildarchs)}'
+            logger.info(ret)
+        else:
+            ret = f'rebuild failed: no such dir {pkgdirname}'
+            logger.warning(ret)
+        return ret
     def _new_buildjob(self, job):
         assert type(job) is Job
         job_to_remove = list()
@@ -74,7 +128,9 @@ class jobsManager:
         self.__buildjobs.append(job)
     def __get_job(self):
         if self.__curr_job:
-            return None
+            logger.error(f'Job {self.__curr_job} failed')
+            self.__finish_job(self.__curr_job)
+            return self.__get_job()
         jobs = self.__buildjobs
         if jobs:
             self.__curr_job = jobs.pop(0)
@@ -168,6 +224,11 @@ class jobsManager:
                 return
             self.last_updatecheck = time()
             self.idle = False
+            # git pull repo
+            try:
+                bash(GIT_PULL, cwd=REPO_ROOT)
+            except Exception:
+                print_exc_plus()
             self.pkgconfigs = load_all_yaml()
             updates = updmgr.check_update()
             for update in updates:
@@ -179,6 +240,9 @@ class jobsManager:
         else:
             # This part does the job
             job = self.__get_job()
+            if not job:
+                logging.error('No job got')
+                return
             if job.multiarch:
                 self.__clean(job, remove_pkg=True)
                 self.__makepkg(job)
@@ -236,15 +300,21 @@ class updateManager:
         pkgfiles = self.__get_package_list(dirname, arch)
         ver = get_pkg_details_from_name(pkgfiles[0]).ver
         return ver
-    def check_update(self):
+    def check_update(self, rebuild_package=None):
         updates = list()
         for pkg in jobsmgr.pkgconfigs:
+            if rebuild_package and \
+                rebuild_package != pkg.dirname:
+                continue
             pkgdir = REPO_ROOT / pkg.dirname
             logger.info(f'checking update: {pkg.dirname}')
             pkgbuild = pkgdir / 'PKGBUILD'
             archs = get_arch_from_pkgbuild(pkgbuild)
             buildarchs = [BUILD_ARCH_MAPPING.get(arch, None) for arch in archs]
             buildarchs = [arch for arch in buildarchs if arch is not None]
+            if not buildarchs:
+                logger.warning(f'No build arch for {pkg.dirname}, refuse to build.')
+                continue
             # hopefully we only need to check one arch for update
             arch = 'x86_64' if 'x86_64' in buildarchs else buildarchs[0] # prefer x86
             mon_nspawn_shell(arch, MAKEPKG_UPD_CMD, cwd=pkgdir, seconds=60*60,
@@ -277,11 +347,20 @@ updmgr = updateManager()
 
 
 
-def info(*args, **kwargs):
-    return (args, kwargs)
+def info():
+    return (str(jobsmgr))
+
+def rebuild_package(pkgdirname, clean=False):
+    return jobsmgr.rebuild_package(pkgdirname, clean=clean)
+
+def clean(pkgdirname):
+    return jobsmgr.reset_dir(pkgdirname=pkgdirname)
+
+def clean_all():
+    return jobsmgr.reset_dir(all=True)
 
 def run(funcname, args=list(), kwargs=dict()):
-    if funcname in ('info',):
+    if funcname in ('info', 'rebuild_package', 'clean', 'clean_all'):
         logger.info('running: %s %s %s',funcname, args, kwargs)
         ret = eval(funcname)(*args, **kwargs)
         logger.info('done: %s %s',funcname, ret)

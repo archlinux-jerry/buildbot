@@ -211,7 +211,6 @@ def get_arch_from_pkgbuild(fpath):
                 if not matches:
                     raise TypeError('Unexpected PKGBUILD format')
                 matches = [arch for arch in matches if arch in ARCHS]
-                assert matches
                 return matches
     raise TypeError('Unexpected PKGBUILD')
 
