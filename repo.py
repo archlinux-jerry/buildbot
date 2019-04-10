@@ -262,11 +262,14 @@ def _update(overwrite=False):
                             if nlocation.exists():
                                 logger.warning(f'Overwriting {nlocation}')
                     else:
+                        should_continue = False
                         for nlocation in (pkg_nlocation, sig_nlocation):
                             if nlocation.exists():
                                 logger.warning('Same version is already in the repo.')
                                 throw_away(pkg_to_add)
-                                continue
+                                should_continue = True
+                        if should_continue:
+                            continue
                     copyfile(pkg_to_add, pkg_nlocation)
                     copyfile(sigfile, sig_nlocation)
                     archive_pkg(pkg_to_add)
