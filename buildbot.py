@@ -68,7 +68,9 @@ class jobsManager:
     def __repr__(self):
         ret = "jobsManager("
         for myproperty in (
-            '__buildjobs', '__uploadjobs', '__curr_job',
+            '_jobsManager__buildjobs',
+            '_jobsManager__uploadjobs',
+            '_jobsManager__curr_job',
             'pkgconfigs', 'last_updatecheck', 'idle'
             ):
             ret += f'{myproperty}={getattr(self, myproperty, None)},'
