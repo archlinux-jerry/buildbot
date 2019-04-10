@@ -61,7 +61,7 @@ if __name__ == '__main__':
             logger.info(run('clean', args=(args.clean,), server=server))
         elif args.rebuild:
             server=(MASTER_BIND_ADDRESS, MASTER_BIND_PASSWD)
-            logger.info(run('rebuild', args=(args.rebuild,), kwargs={'clean': True}, server=server))
+            logger.info(run('rebuild_package', args=(args.rebuild,), kwargs={'clean': True}, server=server))
         else:
             parser.error("Please choose an action")
     except Exception:
