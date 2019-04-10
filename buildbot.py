@@ -98,10 +98,10 @@ class jobsManager:
         return True
     def rebuild_package(self, pkgdirname, clean=False):
         self.pkgconfigs = load_all_yaml()
+        if (REPO_ROOT / pkgdirname).exists() and clean:
+            self.reset_dir(pkgdirname)
         updates = updmgr.check_update(rebuild_package=pkgdirname)
         if updates and len(updates) == 1:
-            if clean:
-                self.reset_dir(pkgdirname)
             (pkgconfig, ver, buildarchs) = updates[0]
             march = True if len(buildarchs) >= 2 else False
             for arch in buildarchs:
