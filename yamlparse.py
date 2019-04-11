@@ -62,7 +62,7 @@ class pkgConfig:
         ret = "pkgConfig("
         for myproperty in \
             (
-                'dirname', 'type', 'cleanbuild', 'timeout'
+                'dirname', 'type', 'cleanbuild', 'timeout',
                 'prebuild', 'postbuild', 'update', 'failure'
             ):
             ret += f'{myproperty}={getattr(self, myproperty, None)},'
