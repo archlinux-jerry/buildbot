@@ -360,6 +360,7 @@ def info():
     ret += '\nhuman-readable:\n'
     ret += "".join([f"{k} = {jobsmgr.jobs[k]}\n" for k in jobsmgr.jobs])
     ret += f"idle: {jobsmgr.idle}"
+    return ret
 
 def rebuild_package(pkgdirname, clean=False):
     return jobsmgr.rebuild_package(pkgdirname, clean=clean)
