@@ -267,7 +267,7 @@ def configure_logger(logger, format='%(asctime)s - %(name)-18s - %(levelname)s -
                 record.msg = 'Exception caught.\nPrinting stack traceback\n' + record.msg
             return super().format(record)
 
-    logger.setLevel(level)
+    logger.setLevel(logging.DEBUG)
     formatter = ExceptionFormatter(fmt=format)
     logging.addLevelName(49, 'Exception')
     # create file handler
