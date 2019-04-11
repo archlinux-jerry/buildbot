@@ -39,6 +39,36 @@ if __name__ == '__main__':
     import argparse
     from utils import configure_logger
     configure_logger(logger)
+    def print_log():
+        import os, re
+        abspath=os.path.abspath(__file__)
+        abspath=os.path.dirname(abspath)
+        os.chdir(abspath)
+        def is_debug_msg(msg, DEBUG):
+            if '- DEBUG -' in msg:
+                return True
+            elif re.match(r'[0-9]{4}-[0-9]{2}-[0-9]{2}.*', msg):
+                return False
+            else:
+                return DEBUG
+        with open('buildbot.log', 'r') as f:
+            DEBUG = False
+            lines = list()
+            lines += f.read().split('\n')
+            while len(lines) >= 100:
+                lines.pop(0)
+            while True:
+                nlines = f.read().split('\n')
+                if len(nlines) == 1 and nlines[0] == '':
+                    continue
+                else:
+                    lines += nlines
+                for line in lines:
+                    DEBUG = is_debug_msg(line, DEBUG)
+                    if not DEBUG:
+                        print(line)
+                lines = list()
+                sleep(1)
     try:
         parser = argparse.ArgumentParser(description='Client for buildbot')
         parser.add_argument('--info', action='store_true', help='show buildbot info')
@@ -46,6 +76,7 @@ if __name__ == '__main__':
         parser.add_argument('--cleanall', action='store_true', help='checkout pkgbuilds')
         parser.add_argument('--clean', nargs='?', default=None, help='checkout pkgbuilds in one package')
         parser.add_argument('--rebuild', nargs='?', default=None, help='rebuild a package with its dirname')
+        parser.add_argument('--log', action='store_true' , help='print log')
         args = parser.parse_args()
         if args.info:
             server=(MASTER_BIND_ADDRESS, MASTER_BIND_PASSWD)
@@ -62,6 +93,9 @@ if __name__ == '__main__':
         elif args.rebuild:
             server=(MASTER_BIND_ADDRESS, MASTER_BIND_PASSWD)
             logger.info(run('rebuild_package', args=(args.rebuild,), kwargs={'clean': True}, server=server))
+        elif args.log:
+            logger.info('printing logs')
+            print_log()
         else:
             parser.error("Please choose an action")
     except Exception:

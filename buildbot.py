@@ -39,6 +39,11 @@ os.chdir(abspath)
 logger = logging.getLogger('buildbot')
 configure_logger(logger, logfile='buildbot.log', rotate_size=1024*1024*10)
 
+# refuse to run in systemd-nspawn
+if 'systemd-nspawn' in bash('systemd-detect-virt || true'):
+    logger.error('Refused to run in systemd-nspawn.')
+    raise AssertionError('Refused to run in systemd-nspawn.')
+
 REPO_ROOT = Path(PKGBUILD_DIR)
 
 class Job:
@@ -84,13 +89,15 @@ class jobsManager:
         return ret
     def reset_dir(self, pkgdirname=None, all=False):
         if all:
-            logger.info('git checkout all: %s', bash(GIT_RESET_SUBDIR, cwd=REPO_ROOT))
+            logger.info('resetting %s', str(REPO_ROOT))
+            bash(GIT_RESET_SUBDIR, cwd=REPO_ROOT)
         else:
             if not pkgdirname:
                 return False
             cwd = REPO_ROOT / pkgdirname
             if cwd.exists():
-                logger.info('git checkout: %s', bash(GIT_RESET_SUBDIR, cwd=cwd))
+                logger.info('resetting %s', str(cwd))
+                bash(GIT_RESET_SUBDIR, cwd=cwd)
                 for fpath in [f for f in cwd.iterdir()]:
                     if fpath.is_dir() and \
                             fpath.name in ('pkg', 'src'):
