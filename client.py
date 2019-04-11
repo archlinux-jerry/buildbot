@@ -59,7 +59,8 @@ if __name__ == '__main__':
                 lines.pop(0)
             while True:
                 nlines = f.read().split('\n')
-                if len(nlines) == 1 and nlines[0] == '':
+                if not lines and \
+                    len(nlines) == 1 and nlines[0] == '':
                     continue
                 else:
                     lines += nlines
