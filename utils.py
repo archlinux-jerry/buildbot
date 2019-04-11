@@ -26,7 +26,7 @@ def background(func):
 
 def bash(cmdline, **kwargs):
     assert type(cmdline) is str
-    logger.info(f'bash: {cmdline}, kwargs: {kwargs}')
+    logger.debug(f'bash: {cmdline}, kwargs: {kwargs}')
     return(run_cmd(['/bin/bash', '-x', '-e', '-c', cmdline], **kwargs))
 
 def mon_bash(cmdline, seconds=60*30, **kwargs):
@@ -40,7 +40,7 @@ def nspawn_shell(arch, cmdline, cwd=None, **kwargs):
         cwd = root / cwd
     else:
         cwd = root
-    logger.info(f'bash_{arch}: {cmdline}, cwd: {cwd}, kwargs: {kwargs}')
+    logger.debug(f'bash_{arch}: {cmdline}, cwd: {cwd}, kwargs: {kwargs}')
     if arch in ('aarch64', 'arm64'):
         command=f'{SHELL_ARM64_ADDITIONAL}; {SHELL_TRAP}; cd \'{cwd}\'; {cmdline}'
         ret = run_cmd(SHELL_ARCH_ARM64 + [command,], **kwargs)
@@ -147,6 +147,10 @@ def run_cmd(cmd, cwd=None, keepalive=False, KEEPALIVE_TIMEOUT=30, RUN_CMD_TIMEOU
 
     if code != 0:
         raise subprocess.CalledProcessError(code, cmd, outstr)
+    if logfile:
+        logger.debug('run_cmd: logfile written to %s', str(logfile))
+    else:
+        logger.debug('run_cmd: %s, ret = %s', cmd, outstr)
     return outstr
 
 
@@ -256,7 +260,7 @@ def format_exc_plus():
     return ret
 
 def configure_logger(logger, format='%(asctime)s - %(name)-18s - %(levelname)s - %(message)s',
-                     level=logging.INFO, logfile=None, flevel=logging.INFO, rotate_size=None):
+                     level=logging.INFO, logfile=None, flevel=logging.DEBUG, rotate_size=None):
     class ExceptionFormatter(logging.Formatter):
         def format(self, record):
             if record.levelno == 49:

@@ -65,13 +65,19 @@ class jobsManager:
         self.pkgconfigs = None
         self.last_updatecheck = 0.0
         self.idle = False
+    @property
+    def jobs(self):
+        return \
+        {
+            'build_jobs': self.__buildjobs,
+            'upload_jobs': self.__uploadjobs,
+            'current_job': self.__curr_job
+        }
     def __repr__(self):
         ret = "jobsManager("
         for myproperty in (
-            '_jobsManager__buildjobs',
-            '_jobsManager__uploadjobs',
-            '_jobsManager__curr_job',
-            'pkgconfigs', 'last_updatecheck', 'idle'
+            'jobs', 'pkgconfigs',
+            'last_updatecheck', 'idle'
             ):
             ret += f'{myproperty}={getattr(self, myproperty, None)},'
         ret += ')'
@@ -130,7 +136,7 @@ class jobsManager:
         self.__buildjobs.append(job)
     def __get_job(self):
         if self.__curr_job:
-            logger.error(f'Job {self.__curr_job} failed')
+            logger.error(f'Job {self.__curr_job} failed. Correct the error and rebuild')
             self.__finish_job(self.__curr_job, force=True)
             return self.__get_job()
         jobs = self.__buildjobs
@@ -169,14 +175,12 @@ class jobsManager:
                   fpath.name.endswith(PKG_SIG_SUFFIX)):
                 fpath.unlink()
     def __sign(self, job):
+        logger.info('signing in %s %s', job.pkgconfig.dirname, job.arch)
         cwd = REPO_ROOT / job.pkgconfig.dirname
         for fpath in cwd.iterdir():
             if fpath.name.endswith(PKG_SUFFIX):
                 bash(f'{GPG_SIGN_CMD} {fpath.name}', cwd=cwd)
     def __upload(self, job):
-        '''
-            wip
-        '''
         suc = True
         cwd = REPO_ROOT / job.pkgconfig.dirname
         f_to_upload = list()
@@ -352,7 +356,10 @@ updmgr = updateManager()
 
 
 def info():
-    return (str(jobsmgr))
+    ret = str(jobsmgr)
+    ret += '\nhuman-readable:\n'
+    ret += "".join([f"{k} = {jobsmgr.jobs[k]}\n" for k in jobsmgr.jobs])
+    ret += f"idle: {jobsmgr.idle}"
 
 def rebuild_package(pkgdirname, clean=False):
     return jobsmgr.rebuild_package(pkgdirname, clean=clean)
@@ -365,9 +372,9 @@ def clean_all():
 
 def run(funcname, args=list(), kwargs=dict()):
     if funcname in ('info', 'rebuild_package', 'clean', 'clean_all'):
-        logger.info('running: %s %s %s',funcname, args, kwargs)
+        logger.debug('running: %s %s %s',funcname, args, kwargs)
         ret = eval(funcname)(*args, **kwargs)
-        logger.info('done: %s %s',funcname, ret)
+        logger.info('done: %s %s %s',funcname, args, kwargs)
         return ret
     else:
         logger.error('unexpected: %s %s %s',funcname, args, kwargs)
@@ -384,7 +391,7 @@ def __main():
                     if type(myrecv) is list and len(myrecv) == 3:
                         (funcname, args, kwargs) = myrecv
                         funcname = str(funcname)
-                        logger.info('running: %s %s %s', funcname, args, kwargs)
+                        logger.debug('running: %s %s %s', funcname, args, kwargs)
                         conn.send(run(funcname, args=args, kwargs=kwargs))
         except Exception:
             print_exc_plus()
