@@ -252,6 +252,7 @@ class jobsManager:
                     self._new_buildjob(newjob)
         else:
             # This part does the job
+            self.idle = False
             job = self.__get_job()
             if not job:
                 logging.error('No job got')
@@ -316,44 +317,47 @@ class updateManager:
     def check_update(self, rebuild_package=None):
         updates = list()
         for pkg in jobsmgr.pkgconfigs:
-            if rebuild_package and \
-                rebuild_package != pkg.dirname:
-                continue
-            pkgdir = REPO_ROOT / pkg.dirname
-            logger.info(f'checking update: {pkg.dirname}')
-            pkgbuild = pkgdir / 'PKGBUILD'
-            archs = get_arch_from_pkgbuild(pkgbuild)
-            buildarchs = [BUILD_ARCH_MAPPING.get(arch, None) for arch in archs]
-            buildarchs = [arch for arch in buildarchs if arch is not None]
-            if not buildarchs:
-                logger.warning(f'No build arch for {pkg.dirname}, refuse to build.')
-                continue
-            # hopefully we only need to check one arch for update
-            arch = 'x86_64' if 'x86_64' in buildarchs else buildarchs[0] # prefer x86
-            mon_nspawn_shell(arch, MAKEPKG_UPD_CMD, cwd=pkgdir, seconds=60*60,
-                             logfile = pkgdir / 'buildbot.log.update',
-                             short_return = True)
-            if pkg.type in ('git', 'manual'):
-                ver = self.__get_new_ver(pkg.dirname, arch)
-                oldver = self.__pkgvers.get(pkg.dirname, None)
-                has_update = False
-                if rebuild_package:
-                    has_update = True
-                if oldver:
-                    res = vercmp(ver, oldver)
-                    if res == 1:
+            try:
+                if rebuild_package and \
+                    rebuild_package != pkg.dirname:
+                    continue
+                pkgdir = REPO_ROOT / pkg.dirname
+                logger.info(f'checking update: {pkg.dirname}')
+                pkgbuild = pkgdir / 'PKGBUILD'
+                archs = get_arch_from_pkgbuild(pkgbuild)
+                buildarchs = [BUILD_ARCH_MAPPING.get(arch, None) for arch in archs]
+                buildarchs = [arch for arch in buildarchs if arch is not None]
+                if not buildarchs:
+                    logger.warning(f'No build arch for {pkg.dirname}, refuse to build.')
+                    continue
+                # hopefully we only need to check one arch for update
+                arch = 'x86_64' if 'x86_64' in buildarchs else buildarchs[0] # prefer x86
+                mon_nspawn_shell(arch, MAKEPKG_UPD_CMD, cwd=pkgdir, seconds=60*60,
+                                logfile = pkgdir / 'buildbot.log.update',
+                                short_return = True)
+                if pkg.type in ('git', 'manual'):
+                    ver = self.__get_new_ver(pkg.dirname, arch)
+                    oldver = self.__pkgvers.get(pkg.dirname, None)
+                    has_update = False
+                    if rebuild_package:
                         has_update = True
-                    elif res == -1:
-                        logger.warning(f'package: {pkg.dirname} downgrade attempted')
-                    elif res == 0:
-                        logger.info(f'package: {pkg.dirname} is up to date')
+                    if oldver:
+                        res = vercmp(ver, oldver)
+                        if res == 1:
+                            has_update = True
+                        elif res == -1:
+                            logger.warning(f'package: {pkg.dirname} downgrade attempted')
+                        elif res == 0:
+                            logger.info(f'package: {pkg.dirname} is up to date')
+                    else:
+                        has_update = True
+                    if has_update:
+                        self.__pkgvers[pkg.dirname] = ver
+                        updates.append((pkg, ver, buildarchs))
                 else:
-                    has_update = True
-                if has_update:
-                    self.__pkgvers[pkg.dirname] = ver
-                    updates.append((pkg, ver, buildarchs))
-            else:
-                logger.warning(f'unknown package type: {pkg.type}')
+                    logger.warning(f'unknown package type: {pkg.type}')
+            except Exception:
+                print_exc_plus()
         self._save()
         return updates
 
