@@ -483,23 +483,23 @@ if __name__ == '__main__':
     logger.info('Listener started.')
     while True:
         try:
-            ret = 1
-            ret = jobsmgr.tick()
-        except Exception:
             try:
-                jobsmgr.clean_failed_job()
+                ret = 1
+                ret = jobsmgr.tick()
             except Exception:
+                jobsmgr.clean_failed_job()
                 print_exc_plus()
+            if ret is None:
+                sleep(1)
+            elif ret == 0:
+                pass
+            elif type(ret) in (int, float):
+                sleep(ret)
+            else:
+                sleep(1)
+        except Exception:
             print_exc_plus()
         except KeyboardInterrupt:
             logger.info('KeyboardInterrupt')
             print_exc_plus()
             break
-        if ret is None:
-            sleep(1)
-        elif ret == 0:
-            pass
-        elif type(ret) in (int, float):
-            sleep(ret)
-        else:
-            sleep(1)
