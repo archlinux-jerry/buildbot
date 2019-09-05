@@ -381,6 +381,9 @@ class updateManager:
                     continue
                 pkgdir = REPO_ROOT / pkg.dirname
                 logger.info(f'checking update: {pkg.dirname}')
+                if self.__pkgerrs.get(pkg.dirname, 0) >= 2:
+                    logger.warning(f'package: {pkg.dirname} too many failures checking update')
+                    continue
                 pkgbuild = pkgdir / 'PKGBUILD'
                 archs = get_arch_from_pkgbuild(pkgbuild)
                 buildarchs = [BUILD_ARCH_MAPPING.get(arch, None) for arch in archs]
@@ -401,10 +404,6 @@ class updateManager:
                 if pkg.type in ('git', 'manual'):
                     ver = self.__get_new_ver(pkg.dirname, arch)
                     oldver = self.__pkgvers.get(pkg.dirname, None)
-                    errs = self.__pkgerrs.get(pkg.dirname, 0)
-                    if errs >= 2:
-                        logger.warning(f'package: {pkg.dirname} too many failures checking update')
-                        continue
                     has_update = False
                     if rebuild_package:
                         has_update = True
