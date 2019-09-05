@@ -174,7 +174,7 @@ class jobsManager:
                                         else MAKEPKG_MAKE_CMD
         logger.info('makepkg in %s %s', job.pkgconfig.dirname, job.arch)
         # run pre-makepkg-scripts
-        logger.info('running pre-build scripts')
+        logger.debug('running pre-build scripts')
         for scr in getattr(job.pkgconfig, 'prebuild', list()):
             if type(scr) is str:
                 try:
@@ -197,7 +197,7 @@ class jobsManager:
                         print_exc_plus()
             raise
         # run post-makepkg-scripts
-        logger.info('running post-build scripts')
+        logger.debug('running post-build scripts')
         for scr in getattr(job.pkgconfig, 'postbuild', list()):
             if type(scr) is str:
                 try:
@@ -391,7 +391,7 @@ class updateManager:
                 # hopefully we only need to check one arch for update
                 arch = 'x86_64' if 'x86_64' in buildarchs else buildarchs[0] # prefer x86
                 # run pre_update_scripts
-                logger.info('running pre-update scripts')
+                logger.debug('running pre-update scripts')
                 for scr in getattr(pkg, 'update', list()):
                     if type(scr) is str:
                         mon_nspawn_shell(arch, scr, cwd=pkgdir, seconds=60*60)
