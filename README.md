@@ -10,7 +10,7 @@ cleanbuild:
     true / false
 timeout:
     30 (30 mins, int only)
-extra: (wip)
+extra:
     - update:
         - /bin/true
     - prebuild:

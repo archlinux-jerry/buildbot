@@ -114,7 +114,10 @@ class jobsManager:
         if (REPO_ROOT / pkgdirname).exists() and clean:
             self.reset_dir(pkgdirname)
         updates = updmgr.check_update(rebuild_package=pkgdirname)
-        if updates and len(updates) == 1:
+        if not (REPO_ROOT / pkgdirname).exists():
+            ret = f'rebuild failed: no such dir {pkgdirname}'
+            logger.warning(ret)
+        elif updates and len(updates) == 1:
             (pkgconfig, ver, buildarchs) = updates[0]
             march = True if len(buildarchs) >= 2 else False
             for arch in buildarchs:
@@ -123,7 +126,7 @@ class jobsManager:
             ret = f'rebuild job added for {pkgdirname} {" ".join(buildarchs)}'
             logger.info(ret)
         else:
-            ret = f'rebuild failed: no such dir {pkgdirname}'
+            ret = 'rebuild failed: cannot check update.'
             logger.warning(ret)
         return ret
     def _new_buildjob(self, job):
@@ -143,7 +146,7 @@ class jobsManager:
         self.__buildjobs.append(job)
     def __get_job(self):
         if self.__curr_job:
-            logger.error(f'Job {self.__curr_job} failed. Correct the error and rebuild')
+            logger.error(f'Job {self.__curr_job} failed and is not cleaned.')
             self.__finish_job(self.__curr_job, force=True)
             return self.__get_job()
         jobs = self.__buildjobs
@@ -155,6 +158,12 @@ class jobsManager:
             assert pkgdir == self.__curr_job.pkgconfig.dirname
         self.__curr_job = None
         return True
+    def clean_failed_job(self):
+        if self.__curr_job:
+            logger.error(f'Job {self.__curr_job} failed. Correct the error and rebuild')
+            self.__finish_job(self.__curr_job, force=True)
+        else:
+            raise RuntimeError('Unexpected behavior')
     def __makepkg(self, job):
         cwd = REPO_ROOT / job.pkgconfig.dirname
         if job.multiarch:
@@ -164,10 +173,38 @@ class jobsManager:
             mkcmd = MAKEPKG_MAKE_CMD_CLEAN if job.pkgconfig.cleanbuild \
                                         else MAKEPKG_MAKE_CMD
         logger.info('makepkg in %s %s', job.pkgconfig.dirname, job.arch)
-        return mon_nspawn_shell(arch=job.arch, cwd=cwd, cmdline=mkcmd,
-                                logfile = cwd / 'buildbot.log.makepkg',
-                                short_return = True,
-                                seconds=job.pkgconfig.timeout*60)
+        # run pre-makepkg-scripts
+        logger.info('running pre-build scripts')
+        for scr in getattr(job.pkgconfig, 'prebuild', list()):
+            if type(scr) is str:
+                try:
+                    mon_nspawn_shell(arch=job.arch, cwd=cwd, cmdline=scr, seconds=60*60)
+                except Exception:
+                    print_exc_plus()
+        # actually makepkg
+        try:
+            ret = mon_nspawn_shell(arch=job.arch, cwd=cwd, cmdline=mkcmd,
+                                    logfile = cwd / 'buildbot.log.makepkg',
+                                    short_return = True,
+                                    seconds=job.pkgconfig.timeout*60)
+        except Exception:
+            logger.error(f'Job {job} failed. Running build-failure scripts')
+            for scr in getattr(job.pkgconfig, 'failure', list()):
+                if type(scr) is str:
+                    try:
+                        mon_nspawn_shell(arch=job.arch, cwd=cwd, cmdline=scr, seconds=60*60)
+                    except Exception:
+                        print_exc_plus()
+            raise
+        # run post-makepkg-scripts
+        logger.info('running post-build scripts')
+        for scr in getattr(job.pkgconfig, 'postbuild', list()):
+            if type(scr) is str:
+                try:
+                    mon_nspawn_shell(arch=job.arch, cwd=cwd, cmdline=scr, seconds=60*60)
+                except Exception:
+                    print_exc_plus()
+        return ret
     def __clean(self, job, remove_pkg=False, rm_src=True):
         cwd = REPO_ROOT / job.pkgconfig.dirname
         logger.info('cleaning build dir for %s, %sremoving pkg',
@@ -199,27 +236,41 @@ class jobsManager:
                 f_to_upload.append(sigpath)
                 f_to_upload.append(fpath)
         for f in f_to_upload:
-            size = f.stat().st_size / 1000 / 1000
-            if f.name.endswith(PKG_SUFFIX):
-                for _ in range(10):
-                    timeout = rrun('push_start', args=(f.name, size))
-                    if timeout > 0:
-                        break
+            max_tries = 5
+            for tries in range(max_tries):
+                try:
+                    size = f.stat().st_size / 1000 / 1000
+                    if f.name.endswith(PKG_SUFFIX):
+                        for _ in range(10):
+                            timeout = rrun('push_start', args=(f.name, size))
+                            if timeout > 0:
+                                break
+                            else:
+                                logger.warning('Remote is busy (-1), wait 1 min x10')
+                                sleep(60)
                     else:
-                        logger.warning('Remote is busy (-1), wait 1 min x10')
-                        sleep(60)
-            else:
-                timeout = 60
-            logger.info(f'Uploading {f}, timeout in {timeout}s')
-            mon_bash(UPLOAD_CMD.format(src=f), seconds=int(timeout))
-            if f.name.endswith(PKG_SUFFIX):
-                logger.info(f'Requesting repo update for {f.name}')
-                res = rrun('push_done', args=(f.name,), kwargs={'overwrite': False,})
-                if res is None:
-                    logger.info(f'Update success for {f.name}')
+                        timeout = 60
+                    logger.info(f'Uploading {f}, timeout in {timeout}s')
+                    mon_bash(UPLOAD_CMD.format(src=f), seconds=int(timeout))
+                    if f.name.endswith(PKG_SUFFIX):
+                        logger.info(f'Requesting repo update for {f.name}')
+                        res = rrun('push_done', args=(f.name,), kwargs={'overwrite': False,})
+                        if res is None:
+                            logger.info(f'Update success for {f.name}')
+                        else:
+                            logger.error(f'Update failed for {f.name}, reason: {res}')
+                            suc = False
+                except Exception:
+                    time_to_sleep = (tries + 1) * 60
+                    logger.error(f'We are getting problem uploading {f}, wait {time_to_sleep} secs')
+                    print_exc_plus()
+                    if tries + 1 < max_tries:
+                        sleep(time_to_sleep)
                 else:
-                    logger.error(f'Update failed for {f.name}, reason: {res}')
-                    suc = False
+                    break
+            else:
+                logger.error(f'Upload {f} failed, abort.')
+                raise RuntimeError('Unable to upload some files')
         return suc
     def tick(self):
         '''
@@ -232,24 +283,25 @@ class jobsManager:
             if time() - self.last_updatecheck <= UPDATE_INTERVAL * 60:
                 if not self.idle:
                     logger.info('Buildbot is idling for package updates.')
-                self.idle = True
-                sleep(60)
-                return
-            self.last_updatecheck = time()
-            self.idle = False
-            # git pull repo
-            try:
-                bash(GIT_PULL, cwd=REPO_ROOT)
-            except Exception:
-                print_exc_plus()
-            self.pkgconfigs = load_all_yaml()
-            updates = updmgr.check_update()
-            for update in updates:
-                (pkgconfig, ver, buildarchs) = update
-                march = True if len(buildarchs) >= 2 else False
-                for arch in buildarchs:
-                    newjob = Job(arch, pkgconfig, ver, multiarch=march)
-                    self._new_buildjob(newjob)
+                    self.idle = True
+                return 60
+            else:
+                self.last_updatecheck = time()
+                self.idle = False
+                # git pull repo
+                try:
+                    bash(GIT_PULL, cwd=REPO_ROOT)
+                except Exception:
+                    print_exc_plus()
+                self.pkgconfigs = load_all_yaml()
+                updates = updmgr.check_update()
+                for update in updates:
+                    (pkgconfig, ver, buildarchs) = update
+                    march = True if len(buildarchs) >= 2 else False
+                    for arch in buildarchs:
+                        newjob = Job(arch, pkgconfig, ver, multiarch=march)
+                        self._new_buildjob(newjob)
+                return 0
         else:
             # This part does the job
             self.idle = False
@@ -272,35 +324,41 @@ class jobsManager:
                     else:
                         self.__clean(job, rm_src=False, remove_pkg=True)
             self.__finish_job(job.pkgconfig.dirname)
+            return 0
+
 jobsmgr = jobsManager()
 
 class updateManager:
     def __init__(self, filename='pkgver.json'):
         self.__filename = filename
+        self.__pkgerrs = dict()
         self.__pkgvers = dict()
         self.__load()
     def __load(self):
         if Path(self.__filename).exists():
             with open(self.__filename,"r") as f:
                 try:
-                    pkgvers = json.loads(f.read())
+                    pkgdata = json.loads(f.read())
                 except json.JSONDecodeError:
                     logger.error('pkgver.json - Bad json')
                     print_exc_plus
                     exit(1)
         else:
             logger.warning(f'No {self.__filename} found')
-            pkgvers = dict()
-        assert type(pkgvers) is dict
-        for pkgname in pkgvers:
+            pkgdata = dict()
+        assert type(pkgdata) is dict
+        for pkgname in pkgdata:
             assert type(pkgname) is str
-        self.__pkgvers = pkgvers
+            assert len(pkgdata[pkgname]) == 2
+        self.__pkgvers = {pkgname:pkgdata[pkgname][0] for pkgname in pkgdata}
+        self.__pkgerrs = {pkgname:pkgdata[pkgname][1] for pkgname in pkgdata}
     def _save(self):
-        pkgvers = json.dumps(self.__pkgvers, indent=4)
-        pkgvers += '\n'
+        pkgdata = {pkgname:[self.__pkgvers[pkgname], self.__pkgerrs[pkgname]] for pkgname in self.__pkgvers}
+        pkgdatastr = json.dumps(pkgdata, indent=4)
+        pkgdatastr += '\n'
         with open(self.__filename,"w") as f:
             if f.writable:
-                f.write(pkgvers)
+                f.write(pkgdatastr)
             else:
                 logger.error('pkgver.json - Not writable')
     def __get_package_list(self, dirname, arch):
@@ -332,12 +390,21 @@ class updateManager:
                     continue
                 # hopefully we only need to check one arch for update
                 arch = 'x86_64' if 'x86_64' in buildarchs else buildarchs[0] # prefer x86
+                # run pre_update_scripts
+                logger.info('running pre-update scripts')
+                for scr in getattr(pkg, 'update', list()):
+                    if type(scr) is str:
+                        mon_nspawn_shell(arch, scr, cwd=pkgdir, seconds=60*60)
                 mon_nspawn_shell(arch, MAKEPKG_UPD_CMD, cwd=pkgdir, seconds=60*60,
                                 logfile = pkgdir / 'buildbot.log.update',
                                 short_return = True)
                 if pkg.type in ('git', 'manual'):
                     ver = self.__get_new_ver(pkg.dirname, arch)
                     oldver = self.__pkgvers.get(pkg.dirname, None)
+                    errs = self.__pkgerrs.get(pkg.dirname, 0)
+                    if errs >= 2:
+                        logger.warning(f'package: {pkg.dirname} too many failures checking update')
+                        continue
                     has_update = False
                     if rebuild_package:
                         has_update = True
@@ -353,10 +420,12 @@ class updateManager:
                         has_update = True
                     if has_update:
                         self.__pkgvers[pkg.dirname] = ver
+                        self.__pkgerrs[pkg.dirname] = 0
                         updates.append((pkg, ver, buildarchs))
                 else:
                     logger.warning(f'unknown package type: {pkg.type}')
             except Exception:
+                self.__pkgerrs[pkg.dirname] = self.__pkgerrs.get(pkg.dirname, 0) + 1
                 print_exc_plus()
         self._save()
         return updates
@@ -414,11 +483,23 @@ if __name__ == '__main__':
     logger.info('Listener started.')
     while True:
         try:
-            jobsmgr.tick()
+            ret = 1
+            ret = jobsmgr.tick()
         except Exception:
+            try:
+                jobsmgr.clean_failed_job()
+            except Exception:
+                print_exc_plus()
             print_exc_plus()
         except KeyboardInterrupt:
             logger.info('KeyboardInterrupt')
             print_exc_plus()
             break
-        sleep(1)
+        if ret is None:
+            sleep(1)
+        elif ret == 0:
+            pass
+        elif type(ret) in (int, float):
+            sleep(ret)
+        else:
+            sleep(1)

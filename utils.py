@@ -261,11 +261,19 @@ def format_exc_plus():
 
 def configure_logger(logger, format='%(asctime)s - %(name)-18s - %(levelname)s - %(message)s',
                      level=logging.INFO, logfile=None, flevel=logging.DEBUG, rotate_size=None):
+    try:
+        from notify import send
+    except ModuleNotFoundError:
+        def send(*args):
+            pass
+
     class ExceptionFormatter(logging.Formatter):
         def format(self, record):
             if record.levelno == 49:
                 record.msg = 'Exception caught.\nPrinting stack traceback\n' + record.msg
-            return super().format(record)
+            fmtr = super().format(record)
+            send(fmtr)
+            return fmtr
 
     logger.setLevel(logging.DEBUG)
     formatter = ExceptionFormatter(fmt=format)
