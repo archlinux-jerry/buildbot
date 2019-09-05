@@ -211,7 +211,7 @@ def get_arch_from_pkgbuild(fpath):
     with open(fpath, 'r') as f:
         for line in f.read().split('\n'):
             if line.startswith('arch='):
-                matches = re.findall('[\'\"]([^\'\"]+)[\'\"]', line)
+                matches = re.findall('[()\s\'\"]([\w]+)[()\s\'\"]', line)
                 if not matches:
                     raise TypeError('Unexpected PKGBUILD format')
                 matches = [arch for arch in matches if arch in ARCHS]
