@@ -150,6 +150,7 @@ def run(funcname, args=list(), kwargs=dict()):
         return False
 
 if __name__ == '__main__':
+    logger.info('Buildbot.repod started.')
     while True:
         try:
             with Listener(REPOD_BIND_ADDRESS, authkey=REPOD_BIND_PASSWD) as listener:
