@@ -211,7 +211,7 @@ def get_arch_from_pkgbuild(fpath):
     with open(fpath, 'r') as f:
         for line in f.read().split('\n'):
             if line.startswith('arch='):
-                matches = re.findall('[()\s\'\"]([\w]+)[()\s\'\"]', line)
+                matches = re.findall(r'[()\s\'\"]([\w]+)[()\s\'\"]', line)
                 if not matches:
                     raise TypeError('Unexpected PKGBUILD format')
                 matches = [arch for arch in matches if arch in ARCHS]
@@ -274,13 +274,15 @@ def configure_logger(logger, format='%(asctime)s - %(name)-18s - %(levelname)s -
 
     class ExceptionFormatter(logging.Formatter):
         def __init__(self, *args, notify=False, **kwargs):
-            self.notify = notify
+            self.__notify = notify
+            self.__lastnt = ""
             super().__init__(*args, **kwargs)
         def format(self, record):
             if record.levelno == 49:
                 record.msg = 'Exception caught.\nPrinting stack traceback\n' + record.msg
             fmtr = super().format(record)
-            if self.notify:
+            if self.__notify and not (self.__lastnt == fmtr):
+                self.lastnt = fmtr
                 send(fmtr)
             return fmtr
 

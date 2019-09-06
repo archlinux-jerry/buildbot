@@ -42,7 +42,7 @@ if __name__ == '__main__':
     configure_logger(logger)
     def print_log():
         import os
-        os.system(f'tail -f {CONSOLE_LOGFILE}')
+        os.system(f'tail -n 43 -f \"{CONSOLE_LOGFILE}\"')
     try:
         actions = {
                     'info':     'show buildbot info',
