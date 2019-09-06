@@ -97,7 +97,11 @@ class jobsManager:
             cwd = REPO_ROOT / pkgdirname
             if cwd.exists():
                 logger.info('resetting %s', str(cwd))
-                bash(GIT_RESET_SUBDIR, cwd=cwd)
+                try:
+                    bash(GIT_RESET_SUBDIR, cwd=cwd)
+                except Exception:
+                    logger.error(f'Unable to reset dir {cwd}')
+                    print_exc_plus()
                 for fpath in [f for f in cwd.iterdir()]:
                     if fpath.is_dir() and \
                             fpath.name in ('pkg', 'src'):
