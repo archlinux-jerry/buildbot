@@ -19,7 +19,7 @@ from config import ARCHS, BUILD_ARCHS, BUILD_ARCH_MAPPING, \
                    MAKEPKG_MAKE_CMD, MAKEPKG_MAKE_CMD_CLEAN, \
                    GPG_SIGN_CMD, GPG_VERIFY_CMD, UPDATE_INTERVAL, \
                    MAKEPKG_MAKE_CMD_MARCH, UPLOAD_CMD, \
-                   GIT_PULL, GIT_RESET_SUBDIR
+                   GIT_PULL, GIT_RESET_SUBDIR, CONSOLE_LOGFILE
 
 from utils import print_exc_plus, background, \
                   bash, get_pkg_details_from_name, vercmp, \
@@ -37,7 +37,7 @@ abspath=os.path.dirname(abspath)
 os.chdir(abspath)
 
 logger = logging.getLogger('buildbot')
-configure_logger(logger, logfile='buildbot.log', rotate_size=1024*1024*10)
+configure_logger(logger, logfile='buildbot.log', rotate_size=1024*1024*10, enable_notify=True, consolelog=CONSOLE_LOGFILE)
 
 # refuse to run in systemd-nspawn
 if 'systemd-nspawn' in bash('systemd-detect-virt || true'):

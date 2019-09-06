@@ -28,7 +28,7 @@ abspath=os.path.dirname(abspath)
 os.chdir(abspath)
 
 logger = logging.getLogger('buildbot')
-configure_logger(logger, logfile='repod.log', rotate_size=1024*1024*10)
+configure_logger(logger, logfile='repod.log', rotate_size=1024*1024*10, enable_notify=True)
 
 class pushFm:
     def __init__(self):

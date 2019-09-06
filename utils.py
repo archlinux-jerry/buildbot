@@ -261,7 +261,7 @@ def format_exc_plus():
 
 def configure_logger(logger, format='%(asctime)s - %(name)-18s - %(levelname)s - %(message)s',
                      level=logging.INFO, logfile=None, flevel=logging.DEBUG, rotate_size=None,
-                     enable_notify=False):
+                     enable_notify=False, consolelog=None):
     def __send(*args):
         pass
     if enable_notify:
@@ -307,3 +307,11 @@ def configure_logger(logger, format='%(asctime)s - %(name)-18s - %(levelname)s -
     ch.setLevel(level)
     ch.setFormatter(cformatter)
     logger.addHandler(ch)
+    if consolelog:
+        assert type(consolelog) is str
+        cfh = logging.FileHandler(consolelog)
+        cfh.setLevel(level)
+        cfhformatter = ExceptionFormatter(fmt=format, notify=False)
+        cfh.setFormatter(cfhformatter)
+        logger.addHandler(cfh)
+    # for client.printlog

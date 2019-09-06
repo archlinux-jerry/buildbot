@@ -8,7 +8,8 @@ from multiprocessing.connection import Client
 from time import sleep
 
 from config import REPOD_BIND_ADDRESS, REPOD_BIND_PASSWD, \
-                   MASTER_BIND_ADDRESS, MASTER_BIND_PASSWD
+                   MASTER_BIND_ADDRESS, MASTER_BIND_PASSWD, \
+                   CONSOLE_LOGFILE
 
 from utils import print_exc_plus
 
@@ -40,36 +41,8 @@ if __name__ == '__main__':
     from utils import configure_logger
     configure_logger(logger)
     def print_log():
-        import os, re
-        abspath=os.path.abspath(__file__)
-        abspath=os.path.dirname(abspath)
-        os.chdir(abspath)
-        def is_debug_msg(msg, DEBUG):
-            if '- DEBUG -' in msg:
-                return True
-            elif re.match(r'[0-9]{4}-[0-9]{2}-[0-9]{2}.*', msg):
-                return False
-            else:
-                return DEBUG
-        with open('buildbot.log', 'r') as f:
-            DEBUG = False
-            lines = list()
-            lines += f.read().split('\n')
-            while len(lines) >= 100:
-                lines.pop(0)
-            while True:
-                nlines = f.read().split('\n')
-                if not lines and \
-                    len(nlines) == 1 and nlines[0] == '':
-                    continue
-                else:
-                    lines += nlines
-                for line in lines:
-                    DEBUG = is_debug_msg(line, DEBUG)
-                    if not DEBUG:
-                        print(line)
-                lines = list()
-                sleep(1)
+        import os
+        os.system(f'tail -f {CONSOLE_LOGFILE}')
     try:
         actions = {
                     'info':     'show buildbot info',
