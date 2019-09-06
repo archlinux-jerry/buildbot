@@ -110,7 +110,7 @@ if __name__ == '__main__':
                 parser.exit(status=1)
             server=(MASTER_BIND_ADDRESS, MASTER_BIND_PASSWD)
             for p in action[1:]:
-                logger.info(run('force_upload', args=(p,), server=server))
+                logger.info(run('force_upload', args=(p,), kwargs={'overwrite': args.overwrite}, server=server))
         elif action[0] == 'log':
             logger.info('printing logs')
             print_log()

@@ -505,9 +505,8 @@ def clean(pkgdirname):
 def clean_all():
     return jobsmgr.reset_dir(all=True)
 
-def force_upload(pkgdirname):
-    #jobsmgr.force_upload_package(pkgdirname)
-    return "not implemented"
+def force_upload(pkgdirname, overwrite=False):
+    return jobsmgr.force_upload_package(pkgdirname, overwrite=overwrite)
 
 def getup():
     return jobsmgr.getup()
