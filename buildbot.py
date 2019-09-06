@@ -105,6 +105,8 @@ class jobsManager:
                 for fpath in [f for f in cwd.iterdir()]:
                     if fpath.is_dir() and \
                             fpath.name in ('pkg', 'src'):
+                        if fpath.name == 'pkg':
+                            fpath.chmod(0o0755)
                         rmtree(fpath)
                     elif rmpkg and fpath.is_file() and \
                             (fpath.name.endswith(PKG_SUFFIX) or \
