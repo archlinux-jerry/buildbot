@@ -73,7 +73,7 @@ def load_all():
     pkgconfigs = list()
     for mydir in REPO_ROOT.iterdir():
         try:
-            if mydir.is_dir():
+            if mydir.is_dir() and (not mydir.name.startswith('.')):
                 if (mydir / AUTOBUILD_FNAME).exists():
                     # parsing yaml
                     logger.info('Bulidbot: found %s in %s', AUTOBUILD_FNAME, mydir)

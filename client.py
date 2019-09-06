@@ -71,30 +71,70 @@ if __name__ == '__main__':
                 lines = list()
                 sleep(1)
     try:
-        parser = argparse.ArgumentParser(description='Client for buildbot')
-        parser.add_argument('--info', action='store_true', help='show buildbot info')
-        parser.add_argument('--update', action='store_true', help='update pushed files to the repo')
-        parser.add_argument('--cleanall', action='store_true', help='checkout pkgbuilds')
-        parser.add_argument('--clean', nargs='?', default=None, help='checkout pkgbuilds in one package')
-        parser.add_argument('--rebuild', nargs='?', default=None, help='rebuild a package with its dirname')
-        parser.add_argument('--log', action='store_true' , help='print log')
+        actions = {
+                    'info':     'show buildbot info',
+                    'update':   '[--overwrite] update pushed files to the repo',
+                    'clean':    '[dir / all]   checkout pkgbuilds in packages',
+                    'rebuild':  '[dir1 dir2 --clean]   rebuild packages',
+                    'log':      '[--debug]     print log',
+                    'upload':   '[dir1 dir2]   force upload packages',
+                    'getup':    'check for updates now'
+                  }
+        parser = argparse.ArgumentParser(description='Client for buildbot',
+                                        formatter_class=argparse.RawTextHelpFormatter)
+        __action_help = "\n".join([f"{a}:\t{actions[a]}" for a in actions])
+        parser.add_argument('action', nargs='*', help=f'Choose which action to invoke:\n\n{__action_help}')
+        parser.add_argument('--overwrite', nargs='?', default='False', help='overwrite existing files')
+        parser.add_argument('--debug', nargs='?', default='False', help='print debug logs')
+        parser.add_argument('--clean', nargs='?', default='True', help='clean build packages')
         args = parser.parse_args()
-        if args.info:
+        action = args.action
+        for switch in ('overwrite', 'debug', 'clean'):
+            s = getattr(args, switch)
+            if str(s).lower() in ('false', 'no', 'n', '0'):
+                setattr(args, switch, False)
+            else:
+                setattr(args, switch, True)
+        if not (action and len(action) >= 1 and action[0] in actions):
+            parser.print_help()
+            parser.exit(status=1)
+        if action[0] == 'info':
             server=(MASTER_BIND_ADDRESS, MASTER_BIND_PASSWD)
             logger.info(run('info', server=server))
-        elif args.update:
+        elif action[0] == 'getup':
+            server=(MASTER_BIND_ADDRESS, MASTER_BIND_PASSWD)
+            logger.info(run('getup', server=server))
+        elif action[0] == 'update':
             server=(REPOD_BIND_ADDRESS, REPOD_BIND_PASSWD)
             logger.info(run('update', kwargs={'overwrite': False}, server=server))
-        elif args.cleanall:
+        elif action[0] == 'clean':
+            if len(action) <= 1:
+                print('Error: Need package name')
+                parser.print_help()
+                parser.exit(status=1)
             server=(MASTER_BIND_ADDRESS, MASTER_BIND_PASSWD)
-            logger.info(run('clean_all', server=server))
-        elif args.clean:
+            if 'all' in action[1:]:
+                logger.info(run('clean_all', server=server))
+            else:
+                for p in action[1:]:
+                    logger.info(run('clean', args=(p,), server=server))
+        elif action[0] == 'rebuild':
+            if len(action) <= 1:
+                print('Error: Need package name')
+                parser.print_help()
+                parser.exit(status=1)
             server=(MASTER_BIND_ADDRESS, MASTER_BIND_PASSWD)
-            logger.info(run('clean', args=(args.clean,), server=server))
-        elif args.rebuild:
+            for p in action[1:]:
+                logger.info(run('rebuild_package', args=(p,), kwargs={'clean': args.clean}, server=server))
+        elif action[0] == 'upload':
+            if len(action) <= 1:
+                print('Error: Need package name')
+                parser.print_help()
+                parser.exit(status=1)
             server=(MASTER_BIND_ADDRESS, MASTER_BIND_PASSWD)
-            logger.info(run('rebuild_package', args=(args.rebuild,), kwargs={'clean': True}, server=server))
-        elif args.log:
+            for p in action[1:]:
+                logger.info(run('force_upload', args=(p,), server=server))
+        elif action[0] == 'log':
             logger.info('printing logs')
             print_log()
         else:

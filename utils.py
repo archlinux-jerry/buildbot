@@ -260,23 +260,36 @@ def format_exc_plus():
     return ret
 
 def configure_logger(logger, format='%(asctime)s - %(name)-18s - %(levelname)s - %(message)s',
-                     level=logging.INFO, logfile=None, flevel=logging.DEBUG, rotate_size=None):
-    try:
-        from notify import send
-    except ModuleNotFoundError:
-        def send(*args):
-            pass
+                     level=logging.INFO, logfile=None, flevel=logging.DEBUG, rotate_size=None,
+                     enable_notify=False):
+    def __send(*args):
+        pass
+    if enable_notify:
+        try:
+            from notify import send
+        except ModuleNotFoundError:
+            send = __send
+    else:
+        send = __send
 
     class ExceptionFormatter(logging.Formatter):
+        def __init__(self, *args, notify=False, **kwargs):
+            self.notify = notify
+            super().__init__(*args, **kwargs)
         def format(self, record):
             if record.levelno == 49:
                 record.msg = 'Exception caught.\nPrinting stack traceback\n' + record.msg
             fmtr = super().format(record)
-            send(fmtr)
+            if self.notify:
+                send(fmtr)
             return fmtr
 
     logger.setLevel(logging.DEBUG)
-    formatter = ExceptionFormatter(fmt=format)
+    fnotify = cnotify = False
+    fnotify = True if enable_notify and logfile else False
+    cnotify = True if enable_notify and (not logfile) else False
+    fformatter = ExceptionFormatter(fmt=format, notify=fnotify)
+    cformatter = ExceptionFormatter(fmt=format, notify=cnotify)
     logging.addLevelName(49, 'Exception')
     # create file handler
     if logfile:
@@ -287,10 +300,10 @@ def configure_logger(logger, format='%(asctime)s - %(name)-18s - %(levelname)s -
         else:
             fh = logging.FileHandler(logfile)
         fh.setLevel(flevel)
-        fh.setFormatter(formatter)
+        fh.setFormatter(fformatter)
         logger.addHandler(fh)
     # create console handler
     ch = logging.StreamHandler()
     ch.setLevel(level)
-    ch.setFormatter(formatter)
+    ch.setFormatter(cformatter)
     logger.addHandler(ch)

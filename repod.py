@@ -68,6 +68,21 @@ class pushFm:
                 return None
         else:
             return None
+    def fail(self, fname):
+        update_path = Path('updates')
+        if fname == self.fname:
+            pkg = update_path / self.fname
+            sig = update_path / f'{self.fname}.sig'
+            for f in (pkg, sig):
+                if f.exists():
+                    try:
+                        f.unlink()
+                    except Exception:
+                        logger.warning(f'unable to remove {f.name}')
+            self.__init__()
+            return None
+        else:
+            return "Wrong file"
     def done(self, fname, overwrite=False):
         '''
             return None means success
@@ -117,13 +132,15 @@ def push_start(filename, size):
 def push_done(filename, overwrite=False):
     return pfm.done(filename, overwrite=overwrite)
 
-
+def push_fail(filename):
+    return pfm.fail(filename)
 
 # server part
 
 def run(funcname, args=list(), kwargs=dict()):
     if funcname in ('clean', 'regenerate', 'remove',
-                    'update', 'push_start', 'push_done'):
+                    'update', 'push_start', 'push_done',
+                    'push_fail'):
         logger.info('running: %s %s %s', funcname, args, kwargs)
         ret = eval(funcname)(*args, **kwargs)
         logger.info('done: %s %s',funcname, ret)

@@ -109,7 +109,11 @@ class jobsManager:
             else:
                 return False
         return True
+    def force_upload_package(self, pkgdirname, overwrite=True):
+        pass
     def rebuild_package(self, pkgdirname, clean=False):
+        if not self.idle:
+            logger.debug('rebuild requested and not idle.')
         self.pkgconfigs = load_all_yaml()
         if (REPO_ROOT / pkgdirname).exists() and clean:
             self.reset_dir(pkgdirname)
@@ -263,6 +267,8 @@ class jobsManager:
                 except Exception:
                     time_to_sleep = (tries + 1) * 60
                     logger.error(f'We are getting problem uploading {f}, wait {time_to_sleep} secs')
+                    if not rrun('push_fail', args=(f.name,)):
+                        logger.error('unable to run push_fail')
                     print_exc_plus()
                     if tries + 1 < max_tries:
                         sleep(time_to_sleep)
@@ -272,6 +278,13 @@ class jobsManager:
                 logger.error(f'Upload {f} failed, abort.')
                 raise RuntimeError('Unable to upload some files')
         return suc
+    def getup(self):
+        '''
+            check for updates now !!!
+        '''
+        logger.info('Check for updates now.')
+        self.last_updatecheck = 0.0
+        return "buildbot wakes up"
     def tick(self):
         '''
             check for updates,
@@ -450,8 +463,16 @@ def clean(pkgdirname):
 def clean_all():
     return jobsmgr.reset_dir(all=True)
 
+def force_upload(pkgdirname):
+    #jobsmgr.force_upload_package(pkgdirname)
+    return "not implemented"
+
+def getup():
+    return jobsmgr.getup()
+
 def run(funcname, args=list(), kwargs=dict()):
-    if funcname in ('info', 'rebuild_package', 'clean', 'clean_all'):
+    if funcname in ('info', 'rebuild_package', 'clean', 'clean_all',
+                    'force_upload', 'getup'):
         logger.debug('running: %s %s %s',funcname, args, kwargs)
         ret = eval(funcname)(*args, **kwargs)
         logger.info('done: %s %s %s',funcname, args, kwargs)
@@ -466,7 +487,7 @@ def __main():
         try:
             with Listener(MASTER_BIND_ADDRESS, authkey=MASTER_BIND_PASSWD) as listener:
                 with listener.accept() as conn:
-                    logger.info('connection accepted from %s', listener.last_accepted)
+                    logger.debug('connection accepted from %s', listener.last_accepted)
                     myrecv = conn.recv()
                     if type(myrecv) is list and len(myrecv) == 3:
                         (funcname, args, kwargs) = myrecv
