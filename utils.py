@@ -286,7 +286,7 @@ def configure_logger(logger, format='%(asctime)s - %(name)-18s - %(levelname)s -
 
     logger.setLevel(logging.DEBUG)
     fformatter = ExceptionFormatter(fmt=format, notify=False)
-    cformatter = ExceptionFormatter(fmt=format, notify=True)
+    cformatter = ExceptionFormatter(fmt=format, notify=enable_notify)
     logging.addLevelName(49, 'Exception')
     # create file handler
     if logfile:
