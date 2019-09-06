@@ -98,7 +98,7 @@ class pushFm:
             else returns an error string
         '''
         if [f for f in fnames if not (f.endswith(PKG_SUFFIX) or f.endswith(PKG_SIG_SUFFIX))]:
-            return "file to upload are garbage"
+            return "files to upload are garbage"
         filter_sig = lambda fnames:[fname for fname in fnames if not fname.endswith(PKG_SIG_SUFFIX)]
         if sorted(filter_sig(fnames)) == sorted(filter_sig(self.fnames)):
             try:
@@ -122,20 +122,22 @@ class pushFm:
                             print_exc_plus()
                             return ret
                         else:
-                            try:
-                                if update(overwrite=overwrite):
-                                    continue
-                                else:
-                                    raise RuntimeError('update return false')
-                            except Exception:
-                                print_exc_plus()
-                                return f'{pkg_found} update error'
+                            # gpg verify success
+                            continue
                     else:
                         return f'file missing: pkg {pkg_found} sig {sig_found}'
-                    return "unexpected error"
+                    raise RuntimeError("unexpected error")
                 else:
-                    # success
-                    return None
+                    # gpg verified for all
+                    try:
+                        if update(overwrite=overwrite):
+                            return None
+                        else:
+                            raise RuntimeError('update return false')
+                    except Exception:
+                        print_exc_plus()
+                        return f'{pkg_found} update error'
+                    raise RuntimeError("unexpected error")
             finally:
                 self.__init__()
         else:
