@@ -285,11 +285,8 @@ def configure_logger(logger, format='%(asctime)s - %(name)-18s - %(levelname)s -
             return fmtr
 
     logger.setLevel(logging.DEBUG)
-    fnotify = cnotify = False
-    fnotify = True if enable_notify and logfile else False
-    cnotify = True if enable_notify and (not logfile) else False
-    fformatter = ExceptionFormatter(fmt=format, notify=fnotify)
-    cformatter = ExceptionFormatter(fmt=format, notify=cnotify)
+    fformatter = ExceptionFormatter(fmt=format, notify=False)
+    cformatter = ExceptionFormatter(fmt=format, notify=True)
     logging.addLevelName(49, 'Exception')
     # create file handler
     if logfile:
@@ -311,7 +308,6 @@ def configure_logger(logger, format='%(asctime)s - %(name)-18s - %(levelname)s -
         assert type(consolelog) is str
         cfh = logging.FileHandler(consolelog)
         cfh.setLevel(level)
-        cfhformatter = ExceptionFormatter(fmt=format, notify=False)
-        cfh.setFormatter(cfhformatter)
+        cfh.setFormatter(cformatter)
         logger.addHandler(cfh)
     # for client.printlog
