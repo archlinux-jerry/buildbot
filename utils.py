@@ -219,7 +219,7 @@ def get_arch_from_pkgbuild(fpath):
     raise TypeError('Unexpected PKGBUILD')
 
 def print_exc_plus():
-    logger.log(49, format_exc_plus())
+    logger.critical("Exception caught.\nPrinting stack traceback\n" + format_exc_plus())
 
 def format_exc_plus():
     """
@@ -262,34 +262,13 @@ def format_exc_plus():
 def configure_logger(logger, format='%(asctime)s - %(name)-18s - %(levelname)s - %(message)s',
                      level=logging.INFO, logfile=None, flevel=logging.DEBUG, rotate_size=None,
                      enable_notify=False, consolelog=None):
-    def __send(*args):
-        pass
-    if enable_notify:
-        try:
-            from notify import send
-        except ModuleNotFoundError:
-            send = __send
-    else:
-        send = __send
 
-    class ExceptionFormatter(logging.Formatter):
-        def __init__(self, *args, notify=False, **kwargs):
-            self.__notify = notify
-            self.__lastnt = ""
-            super().__init__(*args, **kwargs)
-        def format(self, record):
-            if record.levelno == 49:
-                record.msg = 'Exception caught.\nPrinting stack traceback\n' + record.msg
-            fmtr = super().format(record)
-            if self.__notify and not (self.__lastnt == fmtr):
-                self.lastnt = fmtr
-                send(fmtr)
-            return fmtr
+    class NotifyHandler(logging.NullHandler):
+        def handle(self, record):
+            send(self.formatter.format(record))
 
     logger.setLevel(logging.DEBUG)
-    fformatter = ExceptionFormatter(fmt=format, notify=False)
-    cformatter = ExceptionFormatter(fmt=format, notify=enable_notify)
-    logging.addLevelName(49, 'Exception')
+    formatter = logging.Formatter(fmt=format)
     # create file handler
     if logfile:
         assert type(logfile) is str
@@ -299,17 +278,28 @@ def configure_logger(logger, format='%(asctime)s - %(name)-18s - %(levelname)s -
         else:
             fh = logging.FileHandler(logfile)
         fh.setLevel(flevel)
-        fh.setFormatter(fformatter)
+        fh.setFormatter(formatter)
         logger.addHandler(fh)
     # create console handler
     ch = logging.StreamHandler()
     ch.setLevel(level)
-    ch.setFormatter(cformatter)
+    ch.setFormatter(formatter)
     logger.addHandler(ch)
+    # for client.printlog
     if consolelog:
         assert type(consolelog) is str
         cfh = logging.FileHandler(consolelog)
         cfh.setLevel(level)
-        cfh.setFormatter(cformatter)
+        cfh.setFormatter(formatter)
         logger.addHandler(cfh)
-    # for client.printlog
+    # notify
+    if enable_notify:
+        try:
+            from notify import send
+        except ModuleNotFoundError:
+            print('Failed to import notify.send')
+        else:
+            nh = NotifyHandler()
+            nh.setLevel(level)
+            nh.setFormatter(formatter)
+            logger.addHandler(nh)
