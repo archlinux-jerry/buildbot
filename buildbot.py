@@ -87,7 +87,7 @@ class jobsManager:
             ret += f'{myproperty}={getattr(self, myproperty, None)},'
         ret += ')'
         return ret
-    def reset_dir(self, pkgdirname=None, all=False):
+    def reset_dir(self, pkgdirname=None, all=False, rmpkg=True):
         if all:
             logger.info('resetting %s', str(REPO_ROOT))
             bash(GIT_RESET_SUBDIR, cwd=REPO_ROOT)
@@ -102,16 +102,36 @@ class jobsManager:
                     if fpath.is_dir() and \
                             fpath.name in ('pkg', 'src'):
                         rmtree(fpath)
-                    elif fpath.is_file() and \
+                    elif rmpkg and fpath.is_file() and \
                             (fpath.name.endswith(PKG_SUFFIX) or \
                              fpath.name.endswith(PKG_SIG_SUFFIX)):
                         fpath.unlink()
             else:
                 return False
         return True
-    def force_upload_package(self, pkgdirname, overwrite=True):
-        pass
-    def rebuild_package(self, pkgdirname, clean=False):
+    def force_upload_package(self, pkgdirname, overwrite=False):
+        if not self.idle:
+            logger.debug('force_upload requested and not idle.')
+        if not (REPO_ROOT / pkgdirname).exists():
+            ret = f'force_upload failed: no such dir {pkgdirname}'
+            logger.warning(ret)
+        else:
+            self.pkgconfigs = load_all_yaml()
+            updates = updmgr.check_update(rebuild_package=pkgdirname)
+            if updates and len(updates) == 1:
+                (pkgconfig, ver, buildarchs) = updates[0]
+                fakejob = Job(buildarchs[0], pkgconfig, ver)
+                if self.__upload(fakejob, overwrite=overwrite):
+                    ret = f'done force_upload {pkgdirname}'
+                    logger.info(ret)
+                else:
+                    ret = f'force_upload {pkgdirname} failed: return code.'
+                    logger.warning(ret)
+            else:
+                ret = f'force_upload {pkgdirname} failed: cannot check update.'
+                logger.warning(ret)
+        return ret
+    def rebuild_package(self, pkgdirname, clean=True):
         if not self.idle:
             logger.debug('rebuild requested and not idle.')
         self.pkgconfigs = load_all_yaml()
@@ -130,7 +150,7 @@ class jobsManager:
             ret = f'rebuild job added for {pkgdirname} {" ".join(buildarchs)}'
             logger.info(ret)
         else:
-            ret = 'rebuild failed: cannot check update.'
+            ret = f'rebuild {pkgdirname} failed: cannot check update.'
             logger.warning(ret)
         return ret
     def _new_buildjob(self, job):
@@ -228,10 +248,10 @@ class jobsManager:
         for fpath in cwd.iterdir():
             if fpath.name.endswith(PKG_SUFFIX):
                 bash(f'{GPG_SIGN_CMD} {fpath.name}', cwd=cwd)
-    def __upload(self, job):
-        suc = True
+    def __upload(self, job, overwrite=False):
         cwd = REPO_ROOT / job.pkgconfig.dirname
         f_to_upload = list()
+        pkg_update_list = list()
         for fpath in cwd.iterdir():
             if fpath.name.endswith(PKG_SUFFIX) and \
                get_pkg_details_from_name(fpath.name).ver == job.version:
@@ -239,36 +259,33 @@ class jobsManager:
                 assert sigpath.exists()
                 f_to_upload.append(sigpath)
                 f_to_upload.append(fpath)
+                pkg_update_list.append(fpath)
+        sizes = [f.stat().st_size / 1000 / 1000 for f in f_to_upload]
+        max_tries = 10
+        for tries in range(max_tries):
+            timeouts = rrun('push_start', args=(f_to_upload, sizes))
+            if type(timeouts) is list:
+                break
+            else:
+                if tries + 1 < max_tries:
+                    logger.warning(f'Remote is busy ({timeouts}), wait 1 min x10 [{tries+1}/10]')
+                    sleep(60)
+        else:
+            raise RuntimeError('Remote is busy and cannot connect')
+        assert len(f_to_upload) == len(timeouts)
+        pkgs_timeouts = {f_to_upload[i]:timeouts[i] for i in range(len(sizes))}
         for f in f_to_upload:
             max_tries = 5
             for tries in range(max_tries):
                 try:
-                    size = f.stat().st_size / 1000 / 1000
-                    if f.name.endswith(PKG_SUFFIX):
-                        for _ in range(10):
-                            timeout = rrun('push_start', args=(f.name, size))
-                            if timeout > 0:
-                                break
-                            else:
-                                logger.warning('Remote is busy (-1), wait 1 min x10')
-                                sleep(60)
-                    else:
-                        timeout = 60
+                    timeout = pkgs_timeouts.get(f)
                     logger.info(f'Uploading {f}, timeout in {timeout}s')
                     mon_bash(UPLOAD_CMD.format(src=f), seconds=int(timeout))
-                    if f.name.endswith(PKG_SUFFIX):
-                        logger.info(f'Requesting repo update for {f.name}')
-                        res = rrun('push_done', args=(f.name,), kwargs={'overwrite': False,})
-                        if res is None:
-                            logger.info(f'Update success for {f.name}')
-                        else:
-                            logger.error(f'Update failed for {f.name}, reason: {res}')
-                            suc = False
                 except Exception:
                     time_to_sleep = (tries + 1) * 60
                     logger.error(f'We are getting problem uploading {f}, wait {time_to_sleep} secs')
                     if not rrun('push_fail', args=(f.name,)):
-                        logger.error('unable to run push_fail')
+                        logger.error('Unable to run push_fail')
                     print_exc_plus()
                     if tries + 1 < max_tries:
                         sleep(time_to_sleep)
@@ -277,7 +294,31 @@ class jobsManager:
             else:
                 logger.error(f'Upload {f} failed, abort.')
                 raise RuntimeError('Unable to upload some files')
-        return suc
+        logger.info(f'Requesting repo update for {pkg_update_list}')
+        res = "unexpected"
+        max_tries = 5
+        for tries in range(max_tries):
+            try:
+                res = rrun('push_done', args=(f_to_upload,), kwargs={'overwrite': overwrite,})
+            except Exception:
+                time_to_sleep = (tries + 1) * 60
+                logger.info(f'Error updating {pkg_update_list}, wait {time_to_sleep} secs')
+                print_exc_plus()
+                if tries + 1 < max_tries:
+                    sleep(time_to_sleep)
+            else:
+                break
+        else:
+            ret = f'Update failed for {pkg_update_list}: max reties exceeded'
+            logger.error(ret)
+            raise RuntimeError(ret)
+        if res is None:
+            logger.info(f'Update success for {pkg_update_list}')
+        else:
+            ret = f'Update failed for {pkg_update_list}, reason: {res}'
+            logger.error(ret)
+            raise RuntimeError(ret)
+        return res is None
     def getup(self):
         '''
             check for updates now !!!
@@ -396,7 +437,8 @@ class updateManager:
                 logger.info(f'checking update: {pkg.dirname}')
                 if self.__pkgerrs.get(pkg.dirname, 0) >= 2:
                     logger.warning(f'package: {pkg.dirname} too many failures checking update')
-                    continue
+                    if rebuild_package is None:
+                        continue
                 pkgbuild = pkgdir / 'PKGBUILD'
                 archs = get_arch_from_pkgbuild(pkgbuild)
                 buildarchs = [BUILD_ARCH_MAPPING.get(arch, None) for arch in archs]
