@@ -4,6 +4,7 @@
 # This file is part of Buildbot by JerryXiao
 
 import logging
+import os
 from multiprocessing.connection import Client
 from time import sleep
 
@@ -14,6 +15,10 @@ from config import REPOD_BIND_ADDRESS, REPOD_BIND_PASSWD, \
 from utils import print_exc_plus
 
 logger = logging.getLogger(f'buildbot.{__name__}')
+
+abspath=os.path.abspath(__file__)
+abspath=os.path.dirname(abspath)
+os.chdir(abspath)
 
 def run(funcname, args=list(), kwargs=dict(), retries=0, server=(REPOD_BIND_ADDRESS, REPOD_BIND_PASSWD)):
     try:
@@ -41,7 +46,6 @@ if __name__ == '__main__':
     from utils import configure_logger
     configure_logger(logger)
     def print_log():
-        import os
         os.system(f'tail -n 43 -f \"{CONSOLE_LOGFILE}\"')
     try:
         actions = {
