@@ -263,7 +263,7 @@ class jobsManager:
         sizes = [f.stat().st_size / 1000 / 1000 for f in f_to_upload]
         max_tries = 10
         for tries in range(max_tries):
-            timeouts = rrun('push_start', args=(f_to_upload, sizes))
+            timeouts = rrun('push_start', args=([f.name for f in f_to_upload], sizes))
             if type(timeouts) is list:
                 break
             else:
@@ -299,7 +299,7 @@ class jobsManager:
         max_tries = 5
         for tries in range(max_tries):
             try:
-                res = rrun('push_done', args=(f_to_upload,), kwargs={'overwrite': overwrite,})
+                res = rrun('push_done', args=([f.name for f in f_to_upload],), kwargs={'overwrite': overwrite,})
             except Exception:
                 time_to_sleep = (tries + 1) * 60
                 logger.info(f'Error updating {pkg_update_list}, wait {time_to_sleep} secs')

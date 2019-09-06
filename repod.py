@@ -175,7 +175,7 @@ if __name__ == '__main__':
         try:
             with Listener(REPOD_BIND_ADDRESS, authkey=REPOD_BIND_PASSWD) as listener:
                 with listener.accept() as conn:
-                    logger.info('connection accepted from %s', listener.last_accepted)
+                    logger.debug('connection accepted from %s', listener.last_accepted)
                     myrecv = conn.recv()
                     if type(myrecv) is list and len(myrecv) == 3:
                         (funcname, args, kwargs) = myrecv
