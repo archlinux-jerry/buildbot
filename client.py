@@ -45,8 +45,11 @@ if __name__ == '__main__':
     import argparse
     from utils import configure_logger
     configure_logger(logger)
-    def print_log():
-        os.system(f'tail -n 43 -f \"{CONSOLE_LOGFILE}\"')
+    def print_log(debug=False):
+        if debug:
+            os.system(f'tail -n 43 -f \"buildbot.log\"')
+        else:
+            os.system(f'tail -n 43 -f \"{CONSOLE_LOGFILE}\"')
     try:
         actions = {
                     'info':     'show buildbot info',
@@ -113,7 +116,7 @@ if __name__ == '__main__':
                 logger.info(run('force_upload', args=(p,), kwargs={'overwrite': args.overwrite}, server=server))
         elif action[0] == 'log':
             logger.info('printing logs')
-            print_log()
+            print_log(debug=args.debug)
         else:
             parser.error("Please choose an action")
     except Exception:
