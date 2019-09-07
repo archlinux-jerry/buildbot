@@ -291,8 +291,9 @@ class jobsManager:
                 except Exception:
                     time_to_sleep = (tries + 1) * 60
                     logger.error(f'We are getting problem uploading {f.name}, wait {time_to_sleep} secs')
-                    if not rrun('push_add_time', args=(f.name, time_to_sleep + timeout)):
-                        logger.error('Unable to run push_add_time')
+                    patret = rrun('push_add_time', args=(f.name, time_to_sleep + timeout))
+                    if not patret is None:
+                        logger.error(f'Unable to run push_add_time, reason: {patret}')
                     print_exc_plus()
                     if tries + 1 < max_tries:
                         sleep(time_to_sleep)
@@ -300,8 +301,9 @@ class jobsManager:
                     break
             else:
                 logger.error(f'Upload {f.name} failed, running push_fail and abort.')
-                if not rrun('push_fail', args=(f.name,)):
-                    logger.error('Unable to run push_fail')
+                pfret = rrun('push_fail', args=(f.name,))
+                if not pfret is None:
+                    logger.error(f'Unable to run push_fail, reason: {pfret}')
                 raise RuntimeError('Unable to upload some files')
         logger.info(f'Requesting repo update for {pkg_update_list_human}')
         res = "unexpected"
