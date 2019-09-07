@@ -267,6 +267,7 @@ class jobsManager:
                 f_to_upload.append(fpath)
                 pkg_update_list.append(fpath)
         sizes = [f.stat().st_size / 1000 / 1000 for f in f_to_upload]
+        pkg_update_list_human = " ".join([f.name for f in pkg_update_list])
         max_tries = 10
         for tries in range(max_tries):
             timeouts = rrun('push_start', args=([f.name for f in f_to_upload], sizes))
@@ -283,24 +284,26 @@ class jobsManager:
         for f in f_to_upload:
             max_tries = 5
             for tries in range(max_tries):
+                timeout = pkgs_timeouts.get(f)
                 try:
-                    timeout = pkgs_timeouts.get(f)
-                    logger.info(f'Uploading {f}, timeout in {timeout}s')
+                    logger.info(f'Uploading {f.name}, timeout in {timeout}s')
                     mon_bash(UPLOAD_CMD.format(src=f), seconds=int(timeout))
                 except Exception:
                     time_to_sleep = (tries + 1) * 60
-                    logger.error(f'We are getting problem uploading {f}, wait {time_to_sleep} secs')
-                    if not rrun('push_fail', args=(f.name,)):
-                        logger.error('Unable to run push_fail')
+                    logger.error(f'We are getting problem uploading {f.name}, wait {time_to_sleep} secs')
+                    if not rrun('push_add_time', args=(f.name, time_to_sleep + timeout)):
+                        logger.error('Unable to run push_add_time')
                     print_exc_plus()
                     if tries + 1 < max_tries:
                         sleep(time_to_sleep)
                 else:
                     break
             else:
-                logger.error(f'Upload {f} failed, abort.')
+                logger.error(f'Upload {f.name} failed, running push_fail and abort.')
+                if not rrun('push_fail', args=(f.name,)):
+                    logger.error('Unable to run push_fail')
                 raise RuntimeError('Unable to upload some files')
-        logger.info(f'Requesting repo update for {pkg_update_list}')
+        logger.info(f'Requesting repo update for {pkg_update_list_human}')
         res = "unexpected"
         max_tries = 5
         for tries in range(max_tries):
@@ -308,20 +311,20 @@ class jobsManager:
                 res = rrun('push_done', args=([f.name for f in f_to_upload],), kwargs={'overwrite': overwrite,})
             except Exception:
                 time_to_sleep = (tries + 1) * 60
-                logger.info(f'Error updating {pkg_update_list}, wait {time_to_sleep} secs')
+                logger.info(f'Error updating {pkg_update_list_human}, wait {time_to_sleep} secs')
                 print_exc_plus()
                 if tries + 1 < max_tries:
                     sleep(time_to_sleep)
             else:
                 break
         else:
-            ret = f'Update failed for {pkg_update_list}: max reties exceeded'
+            ret = f'Update failed for {pkg_update_list_human}: max reties exceeded'
             logger.error(ret)
             raise RuntimeError(ret)
         if res is None:
-            logger.info(f'Update success for {pkg_update_list}')
+            logger.info(f'Update success for {pkg_update_list_human}')
         else:
-            ret = f'Update failed for {pkg_update_list}, reason: {res}'
+            ret = f'Update failed for {pkg_update_list_human}, reason: {res}'
             logger.error(ret)
             raise RuntimeError(ret)
         return res is None

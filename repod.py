@@ -92,6 +92,13 @@ class pushFm:
             return None
         else:
             return "Wrong file"
+    def add_time(self, tfname, atime):
+        if tfname in self.fnames:
+            assert type(atime) in (int, float)
+            self.end_time += atime
+            return None
+        else:
+            return "Wrong file"
     def done(self, fnames, overwrite=False):
         '''
             return None means success
@@ -157,12 +164,15 @@ def push_done(filenames, overwrite=False):
 def push_fail(filename):
     return pfm.fail(filename)
 
+def push_add_time(filename, atime):
+    return pfm.add_time(filename, atime)
+
 # server part
 
 def run(funcname, args=list(), kwargs=dict()):
     if funcname in ('clean', 'regenerate', 'remove',
                     'update', 'push_start', 'push_done',
-                    'push_fail'):
+                    'push_fail', 'push_add_time'):
         logger.info('running: %s %s %s', funcname, args, kwargs)
         ret = eval(funcname)(*args, **kwargs)
         logger.info('done: %s %s',funcname, ret)
