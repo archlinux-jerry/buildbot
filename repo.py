@@ -317,6 +317,12 @@ def _remove(pkgnames, target_archs=[a for a in ARCHS if a != 'any']):
             logger.info("repo-remove: %s", repo_remove(remove_pkgs))
         else:
             logger.warning(f'Nothing to remove in {arch}')
+    archive_dir = Path('archive')
+    for fpath in archive_dir.iterdir():
+        nosigname = fpath.name[:-4] if fpath.name.endswith('.sig') else fpath.name
+        if nosigname.endswith(PKG_SUFFIX) and \
+            get_pkg_details_from_name(nosigname).pkgname in pkgnames:
+            throw_away(fpath)
     logger.info('finished remove')
     return True
 
