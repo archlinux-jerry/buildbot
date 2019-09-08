@@ -563,7 +563,7 @@ def extras(action, pkgname=None):
 
 def run(funcname, args=list(), kwargs=dict()):
     if funcname in ('info', 'rebuild_package', 'clean', 'clean_all',
-                    'force_upload', 'getup'):
+                    'force_upload', 'getup', 'extras'):
         logger.debug('running: %s %s %s',funcname, args, kwargs)
         ret = eval(funcname)(*args, **kwargs)
         logger.debug('run: done: %s %s %s',funcname, args, kwargs)
