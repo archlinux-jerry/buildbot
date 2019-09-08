@@ -54,9 +54,9 @@ def readpkglog(pkgdirname, update=False):
         return f"{cwd / logfile} cannot be found"
 def readmainlog(debug=False):
     logfile = MAIN_LOGFILE if debug else CONSOLE_LOGFILE
-    if (PKGBUILD_DIR / logfile).exists():
+    if (Path('.') / logfile).exists():
         logger.debug(f'formatting buildbot{" debug" if debug else ""} logs')
-        return __simpleread(PKGBUILD_DIR / logfile)
+        return __simpleread(Path('.') / logfile)
     else:
         logger.debug(f'not found: buildbot{" debug" if debug else ""} log')
-        return f"{PKGBUILD_DIR / logfile} cannot be found"
+        return f"{Path('.') / logfile} cannot be found"
