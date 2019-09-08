@@ -54,10 +54,10 @@ if __name__ == '__main__':
         actions = {
                     'info':     'show buildbot info',
                     'update':   '[--overwrite] update pushed files to the repo',
-                    'clean':    '[dir / all]   checkout pkgbuilds in packages',
-                    'rebuild':  '[dir1 dir2 --clean]   rebuild packages',
-                    'log':      '[--debug]     print log',
-                    'upload':   '[dir1 dir2]   force upload packages',
+                    'clean':    '[dir / all] checkout pkgbuilds in packages',
+                    'rebuild':  '[dir1 dir2 --clean] rebuild packages',
+                    'log':      '[--debug] print log',
+                    'upload':   '[dir1 dir2 --overwrite] force upload packages',
                     'getup':    'check for updates now'
                   }
         parser = argparse.ArgumentParser(description='Client for buildbot',
@@ -86,7 +86,7 @@ if __name__ == '__main__':
             logger.info(run('getup', server=server))
         elif action[0] == 'update':
             server=(REPOD_BIND_ADDRESS, REPOD_BIND_PASSWD)
-            logger.info(run('update', kwargs={'overwrite': False}, server=server))
+            logger.info(run('update', kwargs={'overwrite': args.overwrite}, server=server))
         elif action[0] == 'clean':
             if len(action) <= 1:
                 print('Error: Need package name')

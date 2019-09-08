@@ -6,6 +6,7 @@
 
 import logging
 from utils import background, print_exc_plus, configure_logger
+import subprocess
 
 logger = logging.getLogger(f'buildbot.{__name__}')
 
@@ -13,4 +14,7 @@ logger = logging.getLogger(f'buildbot.{__name__}')
 # does nothing
 @background
 def send(content):
-    pass
+    try:
+        subprocess.run(['python', 'tgapi.py', str(content)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except:
+        pass
