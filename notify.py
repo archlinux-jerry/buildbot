@@ -3,12 +3,8 @@
 # notify.py: Automatic management tool for an arch repo.
 # This file is part of Buildbot by JerryXiao
 
-
-import logging
-from utils import background, print_exc_plus, configure_logger
+from utils import background
 import subprocess
-
-logger = logging.getLogger(f'buildbot.{__name__}')
 
 # wip
 # does nothing
