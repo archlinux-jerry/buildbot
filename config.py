@@ -63,4 +63,9 @@ UPLOAD_CMD = 'rsync -avPh \"{src}\" repoupload:/srv/repo/buildbot/repo/updates/'
 GIT_PULL = 'git pull'
 GIT_RESET_SUBDIR = 'git checkout HEAD -- .'
 
+
+# logfiles
+MAIN_LOGFILE = 'buildbot.log'
 CONSOLE_LOGFILE = 'buildbot.log.console'
+PKG_UPDATE_LOGFILE = 'buildbot.log.update'
+MAKEPKG_LOGFILE = 'buildbot.log.makepkg'

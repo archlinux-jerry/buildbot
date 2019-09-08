@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# repod.py: Automatic management tool for an arch repo.
+# client.py: Automatic management tool for an arch repo.
 # This file is part of Buildbot by JerryXiao
 
 import logging
@@ -10,7 +10,7 @@ from time import sleep
 
 from config import REPOD_BIND_ADDRESS, REPOD_BIND_PASSWD, \
                    MASTER_BIND_ADDRESS, MASTER_BIND_PASSWD, \
-                   CONSOLE_LOGFILE
+                   CONSOLE_LOGFILE, MAIN_LOGFILE
 
 from utils import print_exc_plus
 
@@ -47,7 +47,7 @@ if __name__ == '__main__':
     configure_logger(logger)
     def print_log(debug=False):
         if debug:
-            os.system(f'tail -n 43 -f \"buildbot.log\"')
+            os.system(f'tail -n 43 -f \"{MAIN_LOGFILE}\"')
         else:
             os.system(f'tail -n 43 -f \"{CONSOLE_LOGFILE}\"')
     try:

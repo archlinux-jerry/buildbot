@@ -19,7 +19,8 @@ from config import ARCHS, BUILD_ARCHS, BUILD_ARCH_MAPPING, \
                    MAKEPKG_MAKE_CMD, MAKEPKG_MAKE_CMD_CLEAN, \
                    GPG_SIGN_CMD, GPG_VERIFY_CMD, UPDATE_INTERVAL, \
                    MAKEPKG_MAKE_CMD_MARCH, UPLOAD_CMD, \
-                   GIT_PULL, GIT_RESET_SUBDIR, CONSOLE_LOGFILE
+                   GIT_PULL, GIT_RESET_SUBDIR, CONSOLE_LOGFILE, \
+                   MAIN_LOGFILE, PKG_UPDATE_LOGFILE, MAKEPKG_LOGFILE
 
 from utils import print_exc_plus, background, \
                   bash, get_pkg_details_from_name, vercmp, \
@@ -32,12 +33,16 @@ import json
 
 from yamlparse import load_all as load_all_yaml
 
+from extra import gen_pkglist as extra_gen_pkglist, \
+                  readpkglog as extra_readpkglog, \
+                  readmainlog as extra_readmainlog
+
 abspath=os.path.abspath(__file__)
 abspath=os.path.dirname(abspath)
 os.chdir(abspath)
 
 logger = logging.getLogger('buildbot')
-configure_logger(logger, logfile='buildbot.log', rotate_size=1024*1024*10, enable_notify=True, consolelog=CONSOLE_LOGFILE)
+configure_logger(logger, logfile=MAIN_LOGFILE, rotate_size=1024*1024*10, enable_notify=True, consolelog=CONSOLE_LOGFILE)
 
 # refuse to run in systemd-nspawn
 if 'systemd-nspawn' in bash('systemd-detect-virt || true'):
@@ -214,7 +219,7 @@ class jobsManager:
         # actually makepkg
         try:
             ret = mon_nspawn_shell(arch=job.arch, cwd=cwd, cmdline=mkcmd,
-                                    logfile = cwd / 'buildbot.log.makepkg',
+                                    logfile = cwd / MAKEPKG_LOGFILE,
                                     short_return = True,
                                     seconds=job.pkgconfig.timeout*60)
         except Exception:
@@ -399,6 +404,12 @@ class updateManager:
         self.__pkgerrs = dict()
         self.__pkgvers = dict()
         self.__load()
+    @property
+    def pkgvers(self):
+        return self.__pkgvers
+    @property
+    def pkgerrs(self):
+        return self.__pkgerrs
     def __load(self):
         if Path(self.__filename).exists():
             with open(self.__filename,"r") as f:
@@ -465,7 +476,7 @@ class updateManager:
                     if type(scr) is str:
                         mon_nspawn_shell(arch, scr, cwd=pkgdir, seconds=60*60)
                 mon_nspawn_shell(arch, MAKEPKG_UPD_CMD, cwd=pkgdir, seconds=60*60,
-                                logfile = pkgdir / 'buildbot.log.update',
+                                logfile = pkgdir / PKG_UPDATE_LOGFILE,
                                 short_return = True)
                 if pkg.type in ('git', 'manual'):
                     ver = self.__get_new_ver(pkg.dirname, arch)
@@ -531,6 +542,24 @@ def force_upload(pkgdirname, overwrite=False):
 
 def getup():
     return jobsmgr.getup()
+
+def extras(action, pkgname=None):
+    if action.startswith("pkg"):
+        p = extra_gen_pkglist(jobsmgr.pkgconfigs, updmgr.pkgvers, updmgr.pkgerrs)
+        if action == "pkgdetail":
+            return p[1].get(pkgname, None)
+        elif action == "pkgdetails":
+            return p[1]
+        elif action == "pkglist":
+            return p[0]
+    elif action == "mainlog":
+        return extra_readmainlog(debug=False)
+    elif action == "debuglog":
+        return extra_readmainlog(debug=True)
+    elif action == "readpkglog":
+        pkgname = str(pkgname)
+        return extra_readpkglog(pkgname)
+    return False
 
 def run(funcname, args=list(), kwargs=dict()):
     if funcname in ('info', 'rebuild_package', 'clean', 'clean_all',
