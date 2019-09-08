@@ -500,23 +500,33 @@ updmgr = updateManager()
 
 
 
-def info():
-    ret = str(jobsmgr)
-    ret += '\nhuman-readable:\n'
-    ret += "".join([f"{k} = {jobsmgr.jobs[k]}\n" for k in jobsmgr.jobs])
-    ret += f"idle: {jobsmgr.idle}"
+def info(retf='human'):
+    if retf == 'pkgconfigs':
+        ret = jobsmgr.pkgconfigs
+    elif retf == 'jobsmgr':
+        ret = jobsmgr
+    else:
+        # retf = 'human'
+        ret = str(jobsmgr)
+        ret += '\nhuman-readable:\n'
+        ret += "".join([f"{k} = {jobsmgr.jobs[k]}\n" for k in jobsmgr.jobs])
+        ret += f"idle: {jobsmgr.idle}"
     return ret
 
 def rebuild_package(pkgdirname, clean=False):
+    logger.info(f'rebuild command accecpted for {pkgdirname}')
     return jobsmgr.rebuild_package(pkgdirname, clean=clean)
 
 def clean(pkgdirname):
+    logger.info(f'clean command accecpted for {pkgdirname}')
     return jobsmgr.reset_dir(pkgdirname=pkgdirname)
 
 def clean_all():
+    logger.info('clean command accecpted for all')
     return jobsmgr.reset_dir(all=True)
 
 def force_upload(pkgdirname, overwrite=False):
+    logger.info(f'force_upload command accecpted for {pkgdirname}')
     return jobsmgr.force_upload_package(pkgdirname, overwrite=overwrite)
 
 def getup():
@@ -527,7 +537,7 @@ def run(funcname, args=list(), kwargs=dict()):
                     'force_upload', 'getup'):
         logger.debug('running: %s %s %s',funcname, args, kwargs)
         ret = eval(funcname)(*args, **kwargs)
-        logger.info('done: %s %s %s',funcname, args, kwargs)
+        logger.debug('run: done: %s %s %s',funcname, args, kwargs)
         return ret
     else:
         logger.error('unexpected: %s %s %s',funcname, args, kwargs)
@@ -544,7 +554,6 @@ def __main():
                     if type(myrecv) is list and len(myrecv) == 3:
                         (funcname, args, kwargs) = myrecv
                         funcname = str(funcname)
-                        logger.debug('running: %s %s %s', funcname, args, kwargs)
                         conn.send(run(funcname, args=args, kwargs=kwargs))
         except Exception:
             print_exc_plus()
