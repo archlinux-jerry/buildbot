@@ -12,6 +12,10 @@ from utils import print_exc_plus
 from config import PKGBUILD_DIR, MAIN_LOGFILE, CONSOLE_LOGFILE, \
                    PKG_UPDATE_LOGFILE, MAKEPKG_LOGFILE
 
+import re
+
+ASCII_CRL_REPL = re.compile('\x1B[@-_][0-?]*[ -/]*[@-~]')
+
 logger = logging.getLogger(f'buildbot.{__name__}')
 
 abspath=os.path.abspath(__file__)
@@ -36,9 +40,11 @@ def gen_pkglist(pkgconfigs, pkgvers, pkgerrs):
     namelist = [k for k in pkgall]
     return (namelist, pkgall)
 
-def __simpleread(fpath, limit=4096-100):
+def __simpleread(fpath, limit=4096-100, dosub=False):
     with open(fpath, 'r') as f:
         c = f.read()
+    if dosub:
+        c = ASCII_CRL_REPL.sub('', c[-2*limit:])
     if len(c) > limit:
         c = c[-limit:]
     return c
@@ -48,7 +54,7 @@ def readpkglog(pkgdirname, update=False):
     logfile = PKG_UPDATE_LOGFILE if update else MAKEPKG_LOGFILE
     if cwd.exists() and (cwd / logfile).exists():
         logger.debug(f'formatting {"update" if update else "build"} logs in {pkgdirname}')
-        return __simpleread(cwd / logfile)
+        return __simpleread(cwd / logfile, dosub=True)
     else:
         logger.debug(f'not found: {"update" if update else "build"} log in dir {pkgdirname}')
         return f"{cwd / logfile} cannot be found"
