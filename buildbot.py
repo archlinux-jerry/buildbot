@@ -511,17 +511,13 @@ updmgr = updateManager()
 
 
 
-def info(retf='human'):
-    if retf == 'pkgconfigs':
-        ret = jobsmgr.pkgconfigs
-    elif retf == 'jobsmgr':
-        ret = jobsmgr
-    else:
-        # retf = 'human'
-        ret = str(jobsmgr)
+def info(human=False):
+    ret = ""
+    if human is False:
+        ret += str(jobsmgr)
         ret += '\nhuman-readable:\n'
-        ret += "".join([f"{k} = {jobsmgr.jobs[k]}\n" for k in jobsmgr.jobs])
-        ret += f"idle: {jobsmgr.idle}"
+    ret += "".join([f"{k} = {jobsmgr.jobs[k]}\n" for k in jobsmgr.jobs])
+    ret += f"idle: {jobsmgr.idle}"
     return ret
 
 def rebuild_package(pkgdirname, clean=False):
@@ -558,7 +554,10 @@ def extras(action, pkgname=None):
         return extra_readmainlog(debug=True)
     elif action == "readpkglog":
         pkgname = str(pkgname)
-        return extra_readpkglog(pkgname)
+        return extra_readpkglog(pkgname, update=False)
+    elif action == "readpkgupdlog":
+        pkgname = str(pkgname)
+        return extra_readpkglog(pkgname, update=True)
     return False
 
 def run(funcname, args=list(), kwargs=dict()):
