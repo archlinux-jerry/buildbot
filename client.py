@@ -8,6 +8,10 @@ import os
 from multiprocessing.connection import Client
 from time import sleep
 
+abspath=os.path.abspath(__file__)
+abspath=os.path.dirname(abspath)
+os.chdir(abspath)
+
 from config import REPOD_BIND_ADDRESS, REPOD_BIND_PASSWD, \
                    MASTER_BIND_ADDRESS, MASTER_BIND_PASSWD, \
                    CONSOLE_LOGFILE, MAIN_LOGFILE
@@ -16,9 +20,6 @@ from utils import print_exc_plus
 
 logger = logging.getLogger(f'buildbot.{__name__}')
 
-abspath=os.path.abspath(__file__)
-abspath=os.path.dirname(abspath)
-os.chdir(abspath)
 
 def run(funcname, args=list(), kwargs=dict(), retries=0, server=(REPOD_BIND_ADDRESS, REPOD_BIND_PASSWD)):
     try:
