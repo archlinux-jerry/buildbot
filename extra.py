@@ -33,7 +33,7 @@ def gen_pkglist(pkgconfigs, pkgvers, pkgerrs):
         ps = ('type', 'cleanbuild', 'timeout')
         hps = ('prebuild', 'postbuild', 'update', 'failure')
         dps = {p:getattr(pc, p, None) for p in ps}
-        dhps = {p:'\n'.join(str(getattr(pc, p, None))) for p in hps}
+        dhps = {p:'\n'.join([str(cmd) for cmd in getattr(pc, p, None)]) for p in hps}
         # additional package details
         ves = {'version': pkgvers.get(pc.dirname, None), 'errors': pkgerrs.get(pc.dirname, None)}
         pkgall[pc.dirname] = {**dps, **dhps, **ves}
