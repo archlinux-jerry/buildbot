@@ -10,6 +10,8 @@ cleanbuild:
     true / false
 timeout:
     30 (30 mins, int only)
+priority:
+    0 (default, higher is more important)
 extra:
     - update:
         - /bin/true
