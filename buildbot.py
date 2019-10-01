@@ -494,9 +494,10 @@ class updateManager:
                             logger.info(f'package: {pkg.dirname} is up to date')
                     else:
                         has_update = True
+                    # reset error counter
+                    self.__pkgerrs[pkg.dirname] = 0
                     if has_update:
                         self.__pkgvers[pkg.dirname] = ver
-                        self.__pkgerrs[pkg.dirname] = 0
                         updates.append((pkg, ver, buildarchs))
                 else:
                     logger.warning(f'unknown package type: {pkg.type}')
