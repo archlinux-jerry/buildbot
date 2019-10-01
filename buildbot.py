@@ -67,6 +67,8 @@ class Job:
             ret += f'{myproperty}={getattr(self, myproperty, None)},'
         ret += ')'
         return ret
+    def __lt__(self, job2):
+        return self.pkgconfig.priority < job2.pkgconfig.priority
 class jobsManager:
     def __init__(self):
         self.__buildjobs = list()
@@ -186,6 +188,7 @@ class jobsManager:
             return self.__get_job()
         jobs = self.__buildjobs
         if jobs:
+            jobs.sort(reverse=True)
             self.__curr_job = jobs.pop(0)
             return self.__curr_job
     def __finish_job(self, pkgdir, force=False):

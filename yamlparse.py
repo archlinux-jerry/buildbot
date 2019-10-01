@@ -20,7 +20,7 @@ os.chdir(abspath)
 REPO_ROOT = Path(PKGBUILD_DIR)
 
 class pkgConfig:
-    def __init__(self, dirname, pkgtype, cleanbuild, timeout, extra):
+    def __init__(self, dirname, pkgtype, cleanbuild, timeout, priority, extra):
         self.dirname = dirname
 
         self.type = pkgtype
@@ -33,6 +33,7 @@ class pkgConfig:
 
         self.timeout = 30 if timeout is None else int(timeout)
         # timeout in minutes
+        self.priority = 0 if priority is None else int(priority)
 
         self.__extra = extra
         self.__process_extra()
@@ -62,7 +63,7 @@ class pkgConfig:
         ret = "pkgConfig("
         for myproperty in \
             (
-                'dirname', 'type', 'cleanbuild', 'timeout',
+                'dirname', 'type', 'cleanbuild', 'timeout', 'priority',
                 'prebuild', 'postbuild', 'update', 'failure'
             ):
             ret += f'{myproperty}={getattr(self, myproperty, None)},'
@@ -82,7 +83,7 @@ def load_all():
                         content = load(content, Loader=Loader)
                         assert type(content) is dict
                         args = [content.get(part, None) for part in \
-                                ('type', 'cleanbuild', 'timeout', 'extra')]
+                                ('type', 'cleanbuild', 'timeout', 'priority', 'extra')]
                         args = [mydir.name] + args
                         pkgconfigs.append(pkgConfig(*args))
                 else:
