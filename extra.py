@@ -30,7 +30,7 @@ def gen_pkglist(pkgconfigs, pkgvers, pkgerrs):
     # namelist is a list of pkgnames
     pkgall = dict()
     for pc in pkgconfigs:
-        ps = ('type', 'cleanbuild', 'timeout')
+        ps = ('type', 'cleanbuild', 'timeout', 'priority')
         hps = ('prebuild', 'postbuild', 'update', 'failure')
         dps = {p:getattr(pc, p, None) for p in ps}
         dhps = {p:'\n'.join([str(cmd) for cmd in getattr(pc, p, None)]) for p in hps}

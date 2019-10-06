@@ -276,6 +276,7 @@ class jobsManager:
                 pkg_update_list.append(fpath)
         sizes = [f.stat().st_size / 1000 / 1000 for f in f_to_upload]
         pkg_update_list_human = " ".join([f.name for f in pkg_update_list])
+        assert pkg_update_list
         max_tries = 10
         for tries in range(max_tries):
             timeouts = rrun('push_start', args=([f.name for f in f_to_upload], sizes))
