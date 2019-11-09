@@ -444,7 +444,7 @@ class updateManager:
     def __get_package_list(self, dirname, arch):
         pkgdir = REPO_ROOT / dirname
         assert pkgdir.exists()
-        pkglist = nspawn_shell(arch, MAKEPKG_PKGLIST_CMD, cwd=pkgdir)
+        pkglist = nspawn_shell(arch, MAKEPKG_PKGLIST_CMD, cwd=pkgdir, RUN_CMD_TIMEOUT=5*60)
         pkglist = pkglist.split('\n')
         pkglist = [line for line in pkglist if not line.startswith('+')]
         return pkglist
@@ -479,7 +479,7 @@ class updateManager:
                 for scr in getattr(pkg, 'update', list()):
                     if type(scr) is str:
                         mon_nspawn_shell(arch, scr, cwd=pkgdir, seconds=60*60)
-                mon_nspawn_shell(arch, MAKEPKG_UPD_CMD, cwd=pkgdir, seconds=60*60,
+                mon_nspawn_shell(arch, MAKEPKG_UPD_CMD, cwd=pkgdir, seconds=5*60*60,
                                 logfile = pkgdir / PKG_UPDATE_LOGFILE,
                                 short_return = True)
                 if pkg.type in ('git', 'manual'):
