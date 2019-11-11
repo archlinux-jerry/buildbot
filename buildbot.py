@@ -134,6 +134,7 @@ class jobsManager:
             if updates and len(updates) == 1:
                 (pkgconfig, ver, buildarchs) = updates[0]
                 fakejob = Job(buildarchs[0], pkgconfig, ver)
+                self.__sign(fakejob)
                 if self.__upload(fakejob, overwrite=overwrite):
                     ret = f'done force_upload {pkgdirname}'
                     logger.info(ret)
@@ -408,6 +409,7 @@ class updateManager:
         self.__pkgerrs = dict()
         self.__pkgvers = dict()
         self.__load()
+        self.__rebuilding = False
     @property
     def pkgvers(self):
         return self.__pkgvers
@@ -456,11 +458,16 @@ class updateManager:
         updates = list()
         for pkg in jobsmgr.pkgconfigs:
             try:
+                if self.__rebuilding and not rebuild_package:
+                    logger.info(f'Stop checking updates for rebuild.')
+                    break
+                else:
+                    self.__rebuilding = bool(rebuild_package)
                 if rebuild_package and \
                     rebuild_package != pkg.dirname:
                     continue
                 pkgdir = REPO_ROOT / pkg.dirname
-                logger.info(f'checking update: {pkg.dirname}')
+                logger.info(f'{"[rebuild] " if rebuild_package else ""}checking update: {pkg.dirname}')
                 if self.__pkgerrs.get(pkg.dirname, 0) >= 2:
                     logger.warning(f'package: {pkg.dirname} too many failures checking update')
                     if rebuild_package is None:
@@ -509,6 +516,7 @@ class updateManager:
                 self.__pkgerrs[pkg.dirname] = self.__pkgerrs.get(pkg.dirname, 0) + 1
                 print_exc_plus()
         self._save()
+        self.__rebuilding = False
         return updates
 
 updmgr = updateManager()
